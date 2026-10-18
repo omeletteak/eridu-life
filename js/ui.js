@@ -1,6 +1,6 @@
 /* 画面：描画と操作。data.js と sim.js を先に読み込むこと */
 (()=>{
-const {JOBS,newPerson,say,decisionFor,aptLabel,autoChoose,step,fmt,runToEnd,rnd,skylineSVG}=window.Eridu;
+const {JOBS,newPerson,say,decisionFor,aptLabel,autoChoose,step,fmt,runToEnd,rnd,skylineSVG,level}=window.Eridu;
 
 let state={era:"now",pace:1000,speed:1};
 let me=null, peers=[], timer=null, paused=false, pending=null, ended=false;
@@ -24,6 +24,7 @@ function renderId(){
    <dl>
     <dt>出生</dt><dd>${p.birthD.name} <span class="muted">· ${p.birthD.desc}</span></dd>
     ${moved?`<dt>住所</dt><dd>${p.flags.survivor?`<s class="muted">旧都</s> → `:""}${p.d.name}</dd>`:""}
+    <dt>医療</dt><dd>${level(p.d.med)} <span class="muted">· 教育 ${level(p.d.edu)}</span></dd>
     <dt>属性</dt><dd>${p.thiren?p.kind+"のシリオン":"人間"}の${p.sex}</dd>
     <dt>時代</dt><dd>${p.era==="old"?"旧都陥落の前":"いまの新エリー都"}</dd>
     <dt>仕事</dt><dd>${JOBS[p.job].name}${p.proxy?" ＋ 裏稼業":""}</dd>
@@ -238,6 +239,15 @@ function renderMemorial(){
 function segBind(id,fn){$(id).querySelectorAll("button").forEach(b=>b.onclick=()=>{$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));fn(b.dataset.v)})}
 segBind("eraSeg",v=>{state.era=v;applyEra(v==="old")});
 segBind("paceSeg",v=>state.pace=+v);
+/* ネタバレの切り替えは、この端末だけで覚えておく（読めなくても「なし」で動く） */
+const SPOILER_KEY="eridu-life-spoiler";
+function setSpoiler(on){
+  window.Eridu.spoiler=on;
+  $("spoilerSeg").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(b.dataset.v==="on")===on));
+  try{localStorage.setItem(SPOILER_KEY,on?"on":"off")}catch(e){}
+}
+segBind("spoilerSeg",v=>setSpoiler(v==="on"));
+try{setSpoiler(localStorage.getItem(SPOILER_KEY)==="on")}catch(e){setSpoiler(false)}
 segBind("speedSeg",v=>{state.speed=+v;if(!paused&&!pending)schedule()});
 $("pauseBtn").onclick=()=>{paused=!paused;$("pauseBtn").textContent=paused?"再開":"一時停止";if(!paused)schedule()};
 $("bornBtn").onclick=()=>{
@@ -273,7 +283,8 @@ $("bornBtn").onclick=()=>{
   $("decision").innerHTML="";
   // 生まれたときの記録は 0歳の先頭に入れる（開発用に年齢を進めた場合も 0歳になるように）
   const born=[{age:0,text:`${me.birthD.name}で、${me.thiren?me.kind+"のシリオンの":""}${me.sex}として生まれた。`,cls:"big"}];
-  if(me.birthD.id==="camp"||me.birthD.id==="rokubun")born.push({age:0,text:"両親は旧都から逃れてきた人たちだった。",cls:""});
+  // 仮設住宅は必ず、六分街は半分くらいが避難民の家庭（六分街は避難民が寄り集まってできた街）
+  if(me.birthD.id==="camp"||(me.birthD.id==="rokubun"&&Math.random()<.5))born.push({age:0,text:"両親は旧都から逃れてきた人たちだった。",cls:""});
   me.log.unshift(...born);
   $("start").hidden=true;$("end").hidden=true;$("game").hidden=false;
   renderAll();schedule();window.scrollTo(0,0);
