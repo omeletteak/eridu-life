@@ -7,18 +7,20 @@
    sky = 旧都陥落の演出で出すスカイラインの種類（js/skyline.js）
    時代と場所の設定は CLAUDE.md の表を参照 */
 E.DISTRICTS=[
- // いまの時代
- {id:"rokubun",name:"六分街",desc:"避難民が寄り集まってできた下町",w:20,old:0,zone:"outside",sky:"shops",wealth:.5,exp:.2,crime:.3,edu:.5,med:.45,dis:.006},
- {id:"center",name:"中心区",desc:"高層ビル街",w:15,old:0,zone:"outside",sky:"towers",wealth:.85,exp:.08,crime:.15,edu:.85,med:.9,dis:.003},
- {id:"port",name:"港湾地区",desc:"倉庫と貨物線",w:13,old:0,zone:"outside",sky:"port",wealth:.4,exp:.3,crime:.5,edu:.4,med:.4,dis:.008},
- {id:"works",name:"再開発の工事区画",desc:"ホロウ跡地の再建現場",w:11,old:0,zone:"outside",sky:"works",wealth:.35,exp:.5,crime:.4,edu:.35,med:.35,dis:.012},
- {id:"camp",name:"避難民の仮設住宅",desc:"旧都から逃れた人々の街区",w:12,old:0,zone:"outside",sky:"camp",wealth:.1,exp:.55,crime:.55,edu:.15,med:.2,dis:.014},
+ // いまの時代。六分街とルミナスクエアはヤヌス区の一画、澄輝坪と泅瓏囲は衛非地区の町（名前は「区・街」の形で出す）
+ {id:"rokubun",name:"ヤヌス区・六分街",desc:"小さな下町。住みやすい街の上位常連",w:20,old:0,zone:"outside",sky:"shops",wealth:.5,exp:.2,crime:.25,edu:.5,med:.45,dis:.006},
+ {id:"center",name:"ヤヌス区・ルミナスクエア",desc:"ヤヌス区の中心の商業地帯。港もある",w:15,old:0,zone:"outside",sky:"towers",wealth:.85,exp:.08,crime:.15,edu:.85,med:.9,dis:.003},
+ {id:"kokugan",name:"黒雁街跡地",desc:"旧都に近い工業区。重工業の現場が並ぶ",w:11,old:0,zone:"outside",sky:"works",wealth:.35,exp:.55,crime:.4,edu:.35,med:.35,dis:.012},
+ {id:"canvas",name:"カンバス通り",desc:"旧都に近い貧民街。共生ホロウで新都への道が絶たれている",w:8,old:0,zone:"outside",sky:"outer",wealth:.15,exp:.5,crime:.7,edu:.2,med:.2,dis:.015},
+ {id:"camp",name:"避難民の仮設住宅",desc:"旧都から逃れた人々の街区",w:10,old:0,zone:"outside",sky:"camp",wealth:.1,exp:.55,crime:.55,edu:.15,med:.2,dis:.014},
  // 両方の時代
- {id:"outer",name:"郊外",desc:"ホロウ周縁の荒野と集落",w:11,old:12,zone:"outside",sky:"outer",wealth:.2,exp:.75,crime:.6,edu:.25,med:.15,dis:.02},
- {id:"waifei",name:"衛非地区",desc:"地峡の先、半島の古い町並み",w:10,old:10,zone:"outside",sky:"waifei",wealth:.4,exp:.45,crime:.35,edu:.45,med:.5,dis:.012},
- {id:"thronos",name:"スロノス区",desc:"広い土地に施設が点在する地区",w:8,old:8,zone:"outside",sky:"sparse",wealth:.45,exp:.35,crime:.35,edu:.45,med:.6,dis:.01},
- // 旧都陥落の前だけ
- {id:"janus",name:"ヤヌス区",desc:"地峡に近い市街地",w:0,old:14,zone:"outside",sky:"midrise",wealth:.6,exp:.25,crime:.3,edu:.6,med:.65,dis:.007},
+ {id:"elpis",name:"ポート・エルピス",desc:"大海原と大橋を望む小さな埠頭。陥落の後に廃れかけた",w:8,old:6,zone:"outside",sky:"port",wealth:.4,exp:.3,crime:.45,edu:.4,med:.4,dis:.008},
+ {id:"outer",name:"郊外",desc:"荒野と点在する集落",w:11,old:12,zone:"outside",sky:"outer",wealth:.2,exp:.75,crime:.6,edu:.25,med:.15,dis:.02},
+ {id:"waifei",name:"衛非地区・澄輝坪",desc:"海辺の岩山に築かれた古い町。輝磁の産地",w:10,old:12,zone:"outside",sky:"hillside",wealth:.5,exp:.3,crime:.3,edu:.45,med:.45,dis:.009},
+ {id:"qiulong",name:"衛非地区・泅瓏囲",desc:"澄輝坪の真下、海蝕洞窟に築かれた下町",w:5,old:5,zone:"outside",sky:"zakkyo",wealth:.25,exp:.35,crime:.5,edu:.3,med:.3,dis:.01},
+ {id:"thronos",name:"スロノス区",desc:"リゾートビーチと施設が点在する地区",w:8,old:8,zone:"outside",sky:"sparse",wealth:.45,exp:.35,crime:.35,edu:.45,med:.6,dis:.01},
+ // 旧都陥落の前だけ。新エリー都はもともと旧都の新開発地区の呼び名で、ヤヌス区はその市街地
+ {id:"janus",name:"ヤヌス区",desc:"新開発地区（のちの新エリー都）の市街地",w:0,old:14,zone:"outside",sky:"midrise",wealth:.6,exp:.25,crime:.3,edu:.6,med:.65,dis:.007},
  {id:"kcenter",name:"旧都の中心街",desc:"高層ビルの並ぶ都心",w:0,old:18,zone:"inside",sky:"towers",wealth:.85,exp:.12,crime:.15,edu:.85,med:.9,dis:.004},
  {id:"kshita",name:"旧都の下町",desc:"商店と住宅の入り組んだ街",w:0,old:22,zone:"inside",sky:"shops",wealth:.5,exp:.2,crime:.3,edu:.5,med:.55,dis:.006},
  {id:"kzakkyo",name:"旧都の雑居街",desc:"建て増しの重なる雑居ビルの街",w:0,old:16,zone:"inside",sky:"zakkyo",wealth:.3,exp:.3,crime:.55,edu:.3,med:.35,dis:.008},

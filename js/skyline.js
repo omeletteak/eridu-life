@@ -112,29 +112,34 @@ function skylineSVG(style,seed){
         x+=w+1+r()*4;
       }
     }
-  }else if(style==="waifei"){ // 半島の古い町並み：反りのある瓦屋根、楼閣、背後の丘
-    far.push(`<path d="M0,${H-70} Q90,${H-150} 190,${H-110} T380,${H-130} T600,${H-95} L600,${H} L0,${H}Z"/>`);
-    const eave=(x,y,w,lift=9)=>poly([[x-9,y+3],[x-3,y-2],[x+w*.18,y-lift],[x+w*.82,y-lift],[x+w+3,y-2],[x+w+9,y+3]]);
-    let x=4;const tower=W*(.35+r()*.3);
-    while(x<W){
-      if(Math.abs(x-tower)<40){ // 楼閣：幅を狭めながら3〜4段に積む
-        let w=62,y=H,levels=3+Math.floor(r()*2);
-        for(let i=0;i<levels;i++){
-          const h=30-i*3,xx=x+(62-w)/2;
-          rect(xx,y-h,w,h);eave(xx,y-h,w,10);
-          winGrid(xx+8,y-h+8,w-16,h-12,11,12,5,7,.6);
-          y-=h+9;w-=12;
-        }
-        line(x+31,y+9,x+31,y-8,2.5);
-        x+=74;continue;
+  }else if(style==="hillside"){ // 海に面した坂の古い町並み（九份風）：斜面に段々に積む家、提灯の灯る石段、手前の海
+    const ground=x=>H-12-Math.pow(Math.max(0,x-70)/(W-70),1.2)*175; // 左の海辺から右へ上っていく斜面
+    far.push(`<path d="M0,${H-30} Q220,${H-120} 400,${H-235} T600,${H-285} L600,${H} L0,${H}Z"/>`); // 背後の山
+    const eave=(x,y,w)=>poly([[x-6,y+2],[x+w*.2,y-7],[x+w*.8,y-7],[x+w+6,y+2]]);
+    const house=(x,base,w,h)=>{
+      rect(x,base-h,w,H-base+h);eave(x,base-h,w);
+      winGrid(x+5,base-h+7,w-10,h-10,10,12,5,6,.5);
+    };
+    // 奥の段から手前の段へ。奥ほど高い位置に建つ
+    for(const back of [58,30,0]){
+      let x=80+r()*10;
+      while(x<W){
+        const w=24+r()*26,h=20+r()*22;
+        house(x,ground(x+w/2)-back+4,w,h);
+        if(back===0&&r()<.3)wins.push([x+w/2-2,ground(x+w/2)-h+1,4,6]); // 軒先の提灯
+        x+=w+2+r()*8;
       }
-      const w=38+r()*44,h=30+r()*46;
-      rect(x,H-h,w,h);eave(x,H-h,w);
-      if(r()<.35){const w2=w*.6,x2=x+w*.2,h2=16+r()*10;rect(x2,H-h-8-h2,w2,h2+8);eave(x2,H-h-8-h2,w2,7)}
-      winGrid(x+7,H-h+9,w-14,h-14,12,13,6,7,.45);
-      if(r()<.45)wins.push([x+w*.5-3,H-h+4,6,9]); // 提灯
-      x+=w+10+r()*8;
     }
+    // 石段：斜面を縫って上る道に、提灯を連ねる
+    const sx=W*(.45+r()*.15);let px=sx,py=H;
+    for(let i=0;i<9;i++){
+      const nx=px+(i%2?14:-10)+r()*6,ny=py-24;
+      path(`M${n(px)},${n(py)} L${n(nx)},${n(ny)}`,1.4);
+      for(let t=.25;t<1;t+=.5)wins.push([px+(nx-px)*t-2,py+(ny-py)*t-6,4,5]);
+      px=nx;py=ny;
+    }
+    // 海：左端の波
+    for(let i=0;i<3;i++){const y=H-4-i*6,x2=80-i*18;path(`M0,${y} Q${n(x2/2)},${y-3} ${n(x2)},${y}`,1)}
   }else if(style==="sparse"){ // 広い土地に施設が点在：低く横に長い建物、ドーム、細い塔
     // 目印になる塔とドームを必ず1つずつ置く
     const tx=W*(.62+r()*.25),th=200+r()*60;

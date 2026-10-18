@@ -30,7 +30,7 @@ function renderId(){
     <dt>仕事</dt><dd>${JOBS[p.job].name}${p.proxy?" ＋ 裏稼業":""}</dd>
     <dt>家族</dt><dd>${p.married?"配偶者あり":"ひとり"}${p.kids?"・子ども"+p.kids+"人":""}${p.flags.bangboo?"・ボンプ":""}</dd>
    </dl>
-   ${p.flags.survivor?`<div class="stamp move${slam?" slam":""}">転出<small>旧都 → 新エリー都</small></div>`:""}
+   ${p.flags.survivor?`<div class="stamp move${slam?" slam":""}">転出<small>旧都 → ${p.d.id==="outer"?"郊外":"新エリー都"}</small></div>`:""}
    ${p.alive?"":`<div class="stamp">${p.age}歳 没</div>`}`;
 }
 /* 旧都陥落の前はセピアの配色。陥落を生き延びる（範囲の外なら見届ける）と今の新エリー都の配色に移る */
@@ -283,8 +283,8 @@ $("bornBtn").onclick=()=>{
   $("decision").innerHTML="";
   // 生まれたときの記録は 0歳の先頭に入れる（開発用に年齢を進めた場合も 0歳になるように）
   const born=[{age:0,text:`${me.birthD.name}で、${me.thiren?me.kind+"のシリオンの":""}${me.sex}として生まれた。`,cls:"big"}];
-  // 仮設住宅は必ず、六分街は半分くらいが避難民の家庭（六分街は避難民が寄り集まってできた街）
-  if(me.birthD.id==="camp"||(me.birthD.id==="rokubun"&&Math.random()<.5))born.push({age:0,text:"両親は旧都から逃れてきた人たちだった。",cls:""});
+  // 仮設住宅は必ず避難民の家庭。いまの時代のほかの街でも、旧都の生き残りは新都の側か郊外に移り住んだので一部はそう
+  if(me.birthD.id==="camp"||(me.era!=="old"&&Math.random()<.2))born.push({age:0,text:"両親は旧都から逃れてきた人たちだった。",cls:""});
   me.log.unshift(...born);
   $("start").hidden=true;$("end").hidden=true;$("game").hidden=false;
   renderAll();schedule();window.scrollTo(0,0);

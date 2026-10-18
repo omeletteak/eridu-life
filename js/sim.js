@@ -13,7 +13,7 @@ const who=()=>E.spoiler
   ?{army:"防衛軍の部隊",yama:"雲嶽山の人たち"}
   :{army:"制服の部隊",yama:"山の道場の人たち"};
 const armyLine=()=>who().army+"が、避難路を確保しようとしています。";
-const yamaLine=p=>p.d.id==="waifei"?who().yama+"が、避難してきた人を受け入れています。":"";
+const yamaLine=p=>["waifei","qiulong"].includes(p.d.id)?who().yama+"が、避難してきた人を受け入れています。":"";
 E.setRandom=fn=>{R=fn};
 const rnd=()=>R();
 
@@ -22,7 +22,7 @@ const pick=a=>a[Math.floor(R()*a.length)];
 const wpick=(arr,w)=>{let s=arr.reduce((t,x)=>t+w(x),0),r=R()*s;for(const x of arr){r-=w(x);if(r<=0)return x}return arr[arr.length-1]};
 const gauss=()=>{let u=0,v=0;while(!u)u=R();while(!v)v=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
 /* 今の住所の医療・教育。med/edu は 0〜1
-   careF：死亡率とけがの重さにかける倍率（医療が手厚いほど小さい。中心区 0.76 · 郊外 1.21） */
+   careF：死亡率とけがの重さにかける倍率（医療が手厚いほど小さい。ルミナスクエア 0.76 · 郊外 1.21） */
 const careF=p=>1.3-.6*p.d.med;
 const hurt=(p,n)=>{p.hp=clamp(p.hp-n*careF(p))};
 const level=v=>v>=.75?"充実":v>=.5?"ふつう":v>=.3?"乏しい":"ほとんどない";
@@ -100,7 +100,7 @@ const D={
    {label:"ひとりで、ボンプと暮らす",sub:"気楽。老後は少し寂しい",fx:p=>{p.hap=clamp(p.hap+3);p.flags.bangboo=1;say(p,"中古のボンプを買って、二人暮らしになった。")}},
  ]}},
  turn:p=>{
-   // 陥落前はまだ中心区がない。引っ越し先は旧都の中心街（範囲の中に入るので、陥落を中で迎えることになる）
+   // 陥落前はまだルミナスクエアがない。引っ越し先は旧都の中心街（範囲の中に入るので、陥落を中で迎えることになる）
    const preFall=p.fallAge!==null&&!p.flags.fall;
    const to=DISTRICTS.find(x=>x.id===(preFall?"kcenter":"center"));
    return {title:p.age+"歳 · 転機",text:"仕事は「"+JOBS[p.job].name+"」。貯えは"+fmt(p.money)+"です。",opts:[
@@ -234,9 +234,9 @@ function fallWitness(p){
   p.flags.witness=1;
   p.d={...p.d,crime:clamp(p.d.crime+.1,0,1),dis:p.d.dis*1.3,exp:p.d.exp+.05,med:clamp(p.d.med-.05,0,1)};
 }
-/* 範囲の中から生き延びた人は、仮設住宅か、避難民が寄り集まってできた六分街へ */
+/* 範囲の中から生き延びた人は、新都の側（仮設住宅か六分街）か郊外へ */
 function fallSurvive(p){
-  const to=R()<.6?"camp":"rokubun";p.d=DISTRICTS.find(x=>x.id===to);
+  const r=R(),to=r<.5?"camp":r<.8?"rokubun":"outer";p.d=DISTRICTS.find(x=>x.id===to);
   p.money=Math.round(p.money*.2);p.hap=clamp(p.hap-20);p.flags.survivor=1;
   // 店は旧都に残してくるので、店主ではなくなる（新しい都市では商店街で働く）
   if(p.job==="owner"){p.job="shop";p.flags.lostShop=1;say(p,"店は旧都に残してきた。","bad")}
@@ -303,7 +303,7 @@ function step(p){
   // 死亡判定
   if(p.alive){
     const base=p.age<1?.004:p.age<5?.0008:.00003*Math.exp(.095*p.age);
-    // 幼い子ほど医療の差が出る（中心区 0.52 · 郊外 1.42）
+    // 幼い子ほど医療の差が出る（ルミナスクエア 0.52 · 郊外 1.42）
     const care=p.age<5?1.6-1.2*p.d.med:careF(p);
     let q=base*(1.7-p.hp/100)*care+j.haz+(p.proxy?.003:0)+p.d.crime*.0006;
     if(p.flags.oldwork&&p.age>=62)q*=1.1;
