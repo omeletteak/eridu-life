@@ -37,11 +37,15 @@ const decisionCount={};
 const t0=Date.now();
 for(let i=0;i<N;i++){
   const p=E.newPerson(ERA,true);
-  E.runToEnd(p,MAX_YEARS,(p,d,o)=>{const k=d.title+" → "+o.label;decisionCount[k]=(decisionCount[k]||0)+1});
+  let fall=null; // 旧都陥落に遭った年齢・範囲の中(near)か外(far)か・そこで亡くなったか
+  E.runToEnd(p,MAX_YEARS,(p,d,o)=>{
+    const k=d.title+" → "+o.label;decisionCount[k]=(decisionCount[k]||0)+1;
+    if(d.alarm)fall={age:p.age,where:d.alarm,lost:!p.alive,alone:!!p.flags.familyLost};
+  });
   lives.push({
     age:p.age,cause:p.alive?"（上限まで生存）":p.cause,
     birth:p.birthD.name,thiren:p.thiren,job:E.JOBS[p.job].name,
-    eth:p.eth,ethYears:p.years.filter(x=>x==="e").length,
+    eth:p.eth,ethYears:p.years.filter(x=>x==="e").length,fall,
   });
 }
 const ms=Date.now()-t0;
@@ -122,6 +126,25 @@ const byBirth=groupTable("出生地区別",l=>l.birth);
 const byKind=groupTable("人間 / シリオン",l=>l.thiren?"シリオン":"人間");
 const byJob=groupTable("最後の仕事別",l=>l.job);
 
+// 旧都陥落に遭った年齢（旧都の時代だけ）
+const fallRows=[];
+const met=lives.filter(l=>l.fall);
+if(met.length){
+  log(`\n■ 旧都陥落に遭った年齢`);
+  const nearAll=met.filter(l=>l.fall.where==="near").length;
+  log(`  遭った人 ${met.length}人 · 範囲の中 ${nearAll}人 · 範囲の外 ${met.length-nearAll}人`);
+  const alone=met.filter(l=>l.fall.alone),aloneNear=alone.filter(l=>l.fall.where==="near");
+  log(`  家族がすでに消息不明だった人 ${alone.length}人（${pct(alone.length,met.length).trim()}）· 範囲の中で亡くなった割合 ${pct(aloneNear.filter(l=>l.fall.lost).length,aloneNear.length||1).trim()}`);
+  for(const [lo,hi,label] of [[1,9,"1–9歳"],[10,13,"10–13歳"],[14,39,"14–39歳"],[40,99,"40歳以上"]]){
+    const g=met.filter(l=>l.fall.age>=lo&&l.fall.age<=hi);
+    const near=g.filter(l=>l.fall.where==="near");
+    const lost=near.filter(l=>l.fall.lost).length;
+    const farLost=g.filter(l=>l.fall.where==="far"&&l.fall.lost).length;
+    log(`  ${padR(label,9)} ${String(g.length).padStart(6)}人 ${pct(g.length,met.length)}  範囲の中で亡くなった割合 ${pct(lost,near.length||1)}  範囲の外で亡くなった人 ${farLost}人`);
+    fallRows.push({from:lo,to:hi,count:g.length,near:near.length,nearLostRate:lost/(near.length||1),farLost});
+  }
+}
+
 log(`\n■ 決断の発生回数（ランダム選択）`);
 const decs=Object.entries(decisionCount).sort((a,b)=>a[0].localeCompare(b[0],"ja"));
 const dw=Math.max(...decs.map(([k])=>width(k)));
@@ -133,7 +156,7 @@ if(JSON_OUT){
   require("fs").writeFileSync(JSON_OUT,JSON.stringify({
     summary,histogram:binRows,
     causes:causes.map(([cause,count])=>({cause,count,share:count/N})),
-    byBirth,byKind,byJob,decisions:decisionCount,
+    byBirth,byKind,byJob,fallAges:fallRows,decisions:decisionCount,
   },null,2));
   console.log(`JSON を保存しました: ${JSON_OUT}`);
 }
