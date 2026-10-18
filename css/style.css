@@ -1,0 +1,101 @@
+/* Layout: 市民記録端末。上に住民票カード、その下に状態値と年ごとの記録が伸びる一列構成 */
+:root{
+  --bg:#E7EAEE; --paper:#F7F8FA; --ink:#1B2230; --muted:#5D6575; --line:#C9CFD8;
+  --stamp:#C3302A; --ether:#6A4ED6; --ok:#2E7D5B; --warn:#B7791F;
+  --f-display:"DotGothic16","Zen Kaku Gothic New",system-ui,sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141B; --paper:#1A1F29; --ink:#E5E8EE; --muted:#98A0AF; --line:#2D3442;
+  --stamp:#F0594E; --ether:#A68EFF; --ok:#5CC495; --warn:#E3A84A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141B; --paper:#1A1F29; --ink:#E5E8EE; --muted:#98A0AF; --line:#2D3442;
+  --stamp:#F0594E; --ether:#A68EFF; --ok:#5CC495; --warn:#E3A84A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7}
+.wrap{max-width:640px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{margin:0;text-wrap:balance;font-weight:400}
+h1{font-family:var(--f-display);font-size:28px;letter-spacing:.04em;line-height:1.3}
+h2{font-family:var(--f-display);font-size:20px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+p{margin:0}
+.muted{color:var(--muted)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{background:var(--ink);color:var(--paper);border:0;border-radius:3px;padding:10px 16px;font-weight:700}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.btn:focus-visible,.opt:focus-visible,.seg button:focus-visible{outline:2px solid var(--ether);outline-offset:2px}
+.seg{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.seg button{flex:1;background:transparent;border:0;padding:8px 10px;font-size:13px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+label.lbl{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+
+/* 住民票 */
+.idcard{position:relative;display:grid;grid-template-columns:1fr auto;gap:4px 16px}
+.idcard .name{font-size:22px;font-weight:700;letter-spacing:.06em}
+.idcard dl{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 0 0;font-size:13px}
+.idcard dt{color:var(--muted);font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;padding-top:2px}
+.idcard dd{margin:0}
+.age{font-family:var(--f-display);font-size:40px;line-height:1;text-align:right}
+.age small{font-size:14px;color:var(--muted)}
+.stamp{position:absolute;right:14px;bottom:12px;border:2px solid var(--stamp);color:var(--stamp);
+  font-family:var(--f-display);padding:2px 8px;transform:rotate(-8deg);font-size:15px;opacity:.9}
+
+/* 状態値 */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+.stat .top{display:flex;justify-content:space-between;font-size:13px}
+.stat .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--ink);transition:width .4s}
+.stat.ether .bar i{background:var(--ether)}
+.stat.ether .top span:first-child{color:var(--ether);font-weight:700}
+.money{grid-column:1/-1;display:flex;justify-content:space-between;font-size:13px;border-top:1px dashed var(--line);padding-top:8px}
+.money b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:500}
+
+/* 決断 */
+.decision{border:2px solid var(--ink)}
+.decision h2{margin-bottom:6px}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.opt{text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:10px 12px}
+.opt:hover{border-color:var(--ink)}
+.opt b{display:block}
+.opt span{font-size:12px;color:var(--muted)}
+
+/* 記録 */
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.log li{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.log li:last-child{border-bottom:0}
+.log .y{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:2px}
+.log li.big .t{font-weight:700}
+.log li.bad .t{color:var(--stamp)}
+.log li.eth .t{color:var(--ether)}
+.log li.good .t{color:var(--ok)}
+.logbox{max-height:340px;overflow-y:auto}
+
+/* 同じ1秒に生まれた人たち */
+.peers{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.peer{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline}
+.peer .who{min-width:0}
+.peer .st{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.peer.dead .who{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.controls .seg{flex:1;min-width:180px}
+
+.ending{border-top:4px solid var(--ink)}
+.ending .cause{font-family:var(--f-display);font-size:22px;margin:6px 0}
+.lifemap{display:grid;grid-template-columns:repeat(20,1fr);gap:2px;margin-top:12px}
+.lifemap i{aspect-ratio:1;background:var(--line);border-radius:1px}
+.lifemap i.l{background:var(--ink);opacity:.75}
+.lifemap i.e{background:var(--ether)}
+.lifemap i.x{background:var(--stamp)}
+.mem{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.mem div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.mem span:last-child{color:var(--muted);text-align:right}
+footer{font-size:12px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}}
