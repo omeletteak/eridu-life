@@ -35,6 +35,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 .seg button:last-child{border-right:0}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 label.lbl{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+.sel{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:8px 10px}
+.sel:focus-visible{outline:2px solid var(--ether);outline-offset:2px}
+.place-note{font-size:12px;margin-top:6px}
 
 /* 住民票 */
 .idcard{position:relative;display:grid;grid-template-columns:1fr auto;gap:4px 16px}

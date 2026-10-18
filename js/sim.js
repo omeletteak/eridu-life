@@ -29,8 +29,9 @@ const level=v=>v>=.75?"充実":v>=.5?"ふつう":v>=.3?"乏しい":"ほとんど
 const fmt=n=>(n<0?"−":"")+Math.abs(Math.round(n)).toLocaleString("ja-JP")+"万ディニー";
 
 /* isPeer=true の人は記録（log）を残さない。並走する4人と一括シミュレーション用 */
-function newPerson(era,isPeer){
-  const d=wpick(DISTRICTS.filter(x=>(era==="old"?x.old:x.w)>0),x=>era==="old"?x.old:x.w);
+/* placeId を渡すとその地区に生まれる（スタート画面で選んだとき）。なければ時代ごとの重みで抽選 */
+function newPerson(era,isPeer,placeId){
+  const d=(placeId&&DISTRICTS.find(x=>x.id===placeId&&(era==="old"?x.old:x.w)>0))||wpick(DISTRICTS.filter(x=>(era==="old"?x.old:x.w)>0),x=>era==="old"?x.old:x.w);
   const thiren=R()<.2;
   const p={
     name:pick(FAMILY)+" "+pick(GIVEN), sex:R()<.5?"女の子":"男の子",

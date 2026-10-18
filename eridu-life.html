@@ -18,13 +18,18 @@
 
   <!-- スタート -->
   <section id="start" class="card" style="display:flex;flex-direction:column;gap:16px">
-    <p>ホロウと隣り合う都市に、ひとりの赤ちゃんが生まれます。どの地区に、人間かシリオンか、どの時代に生まれるかは選べません。数年ごとに訪れる決断だけを選び、最期まで見届けてください。</p>
+    <p>ホロウと隣り合う都市に、ひとりの赤ちゃんが生まれます。人間かシリオンか、どんな家に生まれるかは選べません。数年ごとに訪れる決断だけを選び、最期まで見届けてください。</p>
     <div>
       <label class="lbl">生まれる時代</label>
       <div class="seg" id="eraSeg">
         <button data-v="now" aria-pressed="true">いまの新エリー都</button>
         <button data-v="old" aria-pressed="false">旧都陥落の前</button>
       </div>
+    </div>
+    <div>
+      <label class="lbl" for="placeSel">生まれる場所</label>
+      <select id="placeSel" class="sel"></select>
+      <p class="muted place-note" id="placeNote"></p>
     </div>
     <div>
       <label class="lbl">1年の速さ</label>

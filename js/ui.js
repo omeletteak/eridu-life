@@ -1,8 +1,8 @@
 /* 画面：描画と操作。data.js と sim.js を先に読み込むこと */
 (()=>{
-const {JOBS,newPerson,say,decisionFor,aptLabel,autoChoose,step,fmt,runToEnd,rnd,skylineSVG,level}=window.Eridu;
+const {DISTRICTS,JOBS,newPerson,say,decisionFor,aptLabel,autoChoose,step,fmt,runToEnd,rnd,skylineSVG,level}=window.Eridu;
 
-let state={era:"now",pace:1000,speed:1};
+let state={era:"now",pace:1000,speed:1,place:""}; // place が "" ならランダム
 let me=null, peers=[], timer=null, paused=false, pending=null, ended=false;
 
 const $=id=>document.getElementById(id);
@@ -237,7 +237,26 @@ function renderMemorial(){
 
 /* 操作 */
 function segBind(id,fn){$(id).querySelectorAll("button").forEach(b=>b.onclick=()=>{$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));fn(b.dataset.v)})}
-segBind("eraSeg",v=>{state.era=v;applyEra(v==="old")});
+/* 生まれる場所：ランダムか、その時代に生まれられる地区から選ぶ。陥落前は旧都の中（陥落で飲まれる）と外に分ける */
+function renderPlaces(){
+  const old=state.era==="old";
+  const ok=DISTRICTS.filter(d=>(old?d.old:d.w)>0);
+  if(!ok.some(d=>d.id===state.place))state.place="";
+  const opt=d=>`<option value="${d.id}"${d.id===state.place?" selected":""}>${d.name}</option>`;
+  $("placeSel").innerHTML=`<option value=""${state.place?"":" selected"}>ランダム（運に任せる）</option>`
+   +(old?`<optgroup label="旧都（陥落で飲まれる範囲）">${ok.filter(d=>d.zone==="inside").map(opt).join("")}</optgroup>`
+        +`<optgroup label="旧都の外">${ok.filter(d=>d.zone!=="inside").map(opt).join("")}</optgroup>`
+       :ok.map(opt).join(""));
+  renderPlaceNote();
+}
+function renderPlaceNote(){
+  const d=DISTRICTS.find(x=>x.id===state.place);
+  $("placeNote").textContent=d?`${d.desc}。医療 ${level(d.med)} · 教育 ${level(d.edu)}`
+    :"生まれやすさは地区の人口に合わせて決まります。";
+}
+$("placeSel").onchange=e=>{state.place=e.target.value;renderPlaceNote()};
+segBind("eraSeg",v=>{state.era=v;applyEra(v==="old");renderPlaces()});
+renderPlaces();
 segBind("paceSeg",v=>state.pace=+v);
 /* ネタバレの切り替えは、この端末だけで覚えておく（読めなくても「なし」で動く） */
 const SPOILER_KEY="eridu-life-spoiler";
@@ -254,7 +273,9 @@ $("bornBtn").onclick=()=>{
   stopAlarm();
   // 開発用：URL に ?fall を付けると旧都陥落の前に生まれ、1歳で陥落が来る
   const era=DEBUG_FALL!==null?"old":state.era;
-  me=newPerson(era,false);
+  // 開発用の ?fall=near / far では範囲の中か外かを優先するので、選んだ場所は使わない
+  const place=DEBUG_FALL==="near"||DEBUG_FALL==="far"?"":state.place;
+  me=newPerson(era,false,place);
   if(DEBUG_FALL==="near"||DEBUG_FALL==="far"){
     const want=DEBUG_FALL==="near"?"inside":"outside";
     for(let i=0;i<200&&me.d.zone!==want;i++)me=newPerson(era,false);
@@ -266,7 +287,7 @@ $("bornBtn").onclick=()=>{
       me.fallAge=DEBUG_AGE;if(QS.has("alone"))me.flags.forceAlone=1;
       while(me.alive&&me.age<DEBUG_AGE-1){step(me);const d=decisionFor(me);if(d)autoChoose(me,d)}
       if(me.alive&&(!want||me.d.zone===want))break;
-      me=newPerson(era,false);
+      me=newPerson(era,false,place);
     }
   }
   // 同じ1秒に生まれた人どうしで名前が重ならないようにする
