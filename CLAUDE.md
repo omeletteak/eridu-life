@@ -22,10 +22,6 @@
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
-- スマホで遊ぶ用に claude.ai の Artifact（非公開）に出している：https://claude.ai/artifact/8TPbMw9wpEQ3vu9pKopzVv
-  - 更新：`node tools/artifact-page.js` で `dist/artifact.html` を作り、Artifact の publish に `url`（上の URL）と
-    `files`（css/style.css・js/data.js・js/sim.js・js/skyline.js・js/ui.js をそれぞれ同じパスで）を付けて出し直す。`dist/` は git に入れない
-  - Artifact では URL のクエリが届かないので、下の開発用の `?fall` などは使えない
 - 開発用：`eridu-life.html?fall` で開くと旧都陥落の前に生まれ、1歳で陥落が来る（演出の確認用）。
   `?fall=near` で範囲の中、`?fall=far` で範囲の外に生まれる。`&age=45` を付けるとその年齢で陥落が来る（それまでは一気に進める）
 
