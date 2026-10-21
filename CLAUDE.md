@@ -21,6 +21,7 @@
 - `tools/choices.js`: 選択肢の総点検。すべての決断を、選択肢が変わる条件ごと（年齢・範囲の中外・家族が消息不明・店主など）に作り、
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す
+- GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
 - スマホで遊ぶ用に claude.ai の Artifact（非公開）に出している：https://claude.ai/artifact/8TPbMw9wpEQ3vu9pKopzVv
   - 更新：`node tools/artifact-page.js` で `dist/artifact.html` を作り、Artifact の publish に `url`（上の URL）と
     `files`（css/style.css・js/data.js・js/sim.js・js/skyline.js・js/ui.js をそれぞれ同じパスで）を付けて出し直す。`dist/` は git に入れない
