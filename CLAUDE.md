@@ -21,9 +21,40 @@
 - `tools/choices.js`: 選択肢の総点検。すべての決断を、選択肢が変わる条件ごと（年齢・範囲の中外・家族が消息不明・店主など）に作り、
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す
+- `tools/style.js`: 書き方の点検（下の「コーディングスタイル」のうち機械で確かめられるもの）。`node tools/style.js [ファイル…]`
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
 - 開発用：`eridu-life.html?fall` で開くと旧都陥落の前に生まれ、1歳で陥落が来る（演出の確認用）。
   `?fall=near` で範囲の中、`?fall=far` で範囲の外に生まれる。`&age=45` を付けるとその年齢で陥落が来る（それまでは一気に進める）
+
+## コーディングスタイル（Fossil に寄せる）
+Fossil の「Coding Style」（https://fossil-scm.org/home/doc/trunk/www/style.wiki）に寄せる。
+- 1行は表示幅80桁まで（全角は2桁）。例外は、途中で切ると grep で探せなくなるもの：URL、画面に出す日本語の文章、
+  HTML や SVG のタグを含む行（Fossil の @ 行の HTML の例外にならう）
+- タブを使わない。字下げは2桁。改行は `\n` だけ。行末に空白を残さない。ファイルは改行で終わる
+- コメントは日本語（Fossil は英語だが、この作品は日本語で書く）。識別子は英語
+- すべての関数に見出しコメントを付ける。何を受け取り、何をして、何を返すかを、本体を読まずに作り直せるくらいに書く。
+  小さな関数は1行でよい。決断（`D`）や出来事（`EVENTS`）の項目、表や定数、広い範囲で使う変数にも用途を書く
+- 複数行のコメントは `/*` と `*/` を単独の行に置き、間の行の頭に `**` を付ける。1行なら `/* … */`。`//` は使わない
+- 制御文の形：`if( x ){` / `}else if( y ){` / `}else{` / `while( x ){` / `switch( x ){` / `for(i = 0; i < n; i++){` /
+  `try{ … }catch(e){`。関数は `function f(a, b){`
+- ブロックは1文でも必ず `{ }` で囲む
+- 演算子の前後とカンマの後に空白。オブジェクトの `{}` の内側には空白を入れない（`{a: 1}`）。文の終わりに `;`
+- HTML のテンプレートに込み入った式を埋め込まない。手前で変数に取り出し、テンプレートには名前だけを置く
+- 点検は `node tools/style.js`
+
+## 変更の作法（Fossil に寄せる）
+Fossil の「Rebase Considered Harmful」（https://fossil-scm.org/home/doc/trunk/www/rebaseharm.md）に寄せる。履歴は起きたとおりに残す。
+- 履歴を書き換えない。rebase・amend・squash・force push をしない。間違えたら新しいコミットで直す（取り消しは `git revert`）
+- main へは「Create a merge commit」で入れる（Squash and merge と Rebase and merge は使わない）。
+  作業ブランチを最新にするときも rebase ではなく、main を取り込むマージ（`git merge origin/main`）
+- コミットは小さく、1つのコミットに1つの事柄。メッセージには何を・なぜを書く
+- ブランチは合流したあとも消さない
+- 作業中のものも早めに push して見える場所に置く（手元で抱え込まない）
+- コミットの前に試す：
+  - `node tools/style.js`（問題なし）
+  - `node tools/choices.js -n 200`（エラー 0件）
+  - 動きを変えないつもりの変更は、`node tools/simulate.js --seed 1`（`--era old` も）の出力を前後で比べて一致を確かめる
+- PR #1〜#3 はこの決まりの前に rebase でマージした。履歴は書き換えないので、そのまま残す
 
 ## 旧都陥落の演出（js/ui.js）
 - 陥落に遭う年齢は 1〜60歳（`fallAge`、若いほど出やすい）。同じ1秒に生まれた4人も同じ年齢
