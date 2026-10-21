@@ -5,7 +5,9 @@
 元ネタは「80億分の1」（https://1in8b.life/ja/）。
 
 ## 遊び方
-`eridu-life.html` をブラウザで直接開くだけで動きます（ライブラリ・ビルド不要）。
+ブラウザで https://omeletteak.github.io/eridu-life/ を開くと遊べます（スマホでも可）。
+
+手元で動かす場合は、`eridu-life.html` をブラウザで直接開くだけで動きます（ライブラリ・ビルド不要）。
 
 ## 注意
 - HoYoverse およびゼンレスゾーンゼロの公式とは関係ありません。
