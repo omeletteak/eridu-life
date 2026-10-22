@@ -5,6 +5,7 @@
 (() => {
   const {
     DISTRICTS,
+    outlook,
     JOBS,
     newPerson,
     say,
@@ -106,7 +107,7 @@
   function applyEra(old){
     document.body.classList.toggle("era-old", old);
     $("brand").textContent = old
-      ? "Old capital civic record · 非公式ファン作品"
+      ? "Eridu civic record · 非公式ファン作品"
       : "New Eridu civic record · 非公式ファン作品";
   }
 
@@ -646,8 +647,10 @@
 
   /*
   ** 「生まれる場所」の選択肢を、今の時代に生まれられる地区で作り直す。
-  ** 先頭はランダム。陥落前は旧都の中（陥落で飲まれる）と外に分ける。
-  ** 選んでいた地区がその時代になければランダムに戻す。
+  ** 先頭はランダム。続けて暮らしの見込み（outlook）の良い順に、印を
+  ** 付けて並べる。陥落で飲まれる範囲かどうかは出さない（見込みにも
+  ** 陥落は入っていない）。選んでいた地区がその時代になければランダムに
+  ** 戻す。
   */
   function renderPlaces(){
     const old = state.era === "old";
@@ -658,26 +661,31 @@
     /* 地区 d の option の HTML を返す。 */
     const opt = d => {
       const sel = d.id === state.place ? " selected" : "";
-      return `<option value="${d.id}"${sel}>${d.name}</option>`;
+      const mark = outlook(d).mark;
+      return `<option value="${d.id}"${sel}>${mark} ${d.name}</option>`;
     };
-    const inside = ok.filter(d => d.zone === "inside").map(opt).join("");
-    const outside = ok.filter(d => d.zone !== "inside").map(opt).join("");
+    const sorted = ok.slice().sort((a, b) => outlook(b).s - outlook(a).s);
+    const places = sorted.map(opt).join("");
     const random = state.place ? "" : " selected";
     $("placeSel").innerHTML =
-      `<option value=""${random}>ランダム（運に任せる）</option>` +
-      (old
-        ? `<optgroup label="旧都（陥落で飲まれる範囲）">${inside}</optgroup>` +
-          `<optgroup label="旧都の外">${outside}</optgroup>`
-        : ok.map(opt).join(""));
+      `<option value=""${random}>ランダム（運に任せる）</option>` + places;
     renderPlaceNote();
   }
 
-  /* 選んだ地区の説明と医療・教育の水準を、選択肢の下に出す。 */
+  /*
+  ** 選んだ地区の説明と医療・教育の水準、暮らしの見込みを選択肢の下に
+  ** 出す。ランダムなら、生まれやすさと印の意味を出す。
+  */
   function renderPlaceNote(){
     const d = DISTRICTS.find(x => x.id === state.place);
-    $("placeNote").textContent = d
-      ? `${d.desc}。医療 ${level(d.med)} · 教育 ${level(d.edu)}`
-      : "生まれやすさは地区の人口に合わせて決まります。";
+    if( !d ){
+      $("placeNote").textContent = "生まれやすさは地区の人口で決まります。" +
+        "◎○△✕ は医療・治安・ホロウからの近さで見た暮らしの見込みです。";
+      return;
+    }
+    const o = outlook(d);
+    $("placeNote").textContent = `${d.desc}。医療 ${level(d.med)} · ` +
+      `教育 ${level(d.edu)} · 見込み ${o.mark} ${o.label}`;
   }
   $("placeSel").onchange = e => {
     state.place = e.target.value;

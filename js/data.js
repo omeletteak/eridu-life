@@ -98,31 +98,32 @@
     },
     /*
     ** 旧都陥落の前だけ。新エリー都はもともと旧都の新開発地区の呼び名で、
-    ** ヤヌス区はその市街地。
+    ** ヤヌス区はその市街地。陥落前の人は自分の街を「旧都」とは呼ばない
+    ** ので「エリー都・〜」。範囲の中かどうかは画面で明言しない。
     */
     {
       id: "janus", name: "ヤヌス区",
-      desc: "新開発地区（のちの新エリー都）の市街地",
+      desc: "新開発地区「新エリー都」の市街地",
       w: 0, old: 14, zone: "outside", sky: "midrise",
       wealth: 0.6, exp: 0.25, crime: 0.3, edu: 0.6,
       med: 0.65, dis: 0.007,
     },
     {
-      id: "kcenter", name: "旧都の中心街",
-      desc: "高層ビルの並ぶ都心",
+      id: "kcenter", name: "エリー都・中心街",
+      desc: "高層ビルの並ぶ都心。何でも揃う",
       w: 0, old: 18, zone: "inside", sky: "towers",
       wealth: 0.85, exp: 0.12, crime: 0.15, edu: 0.85,
       med: 0.9, dis: 0.004,
     },
     {
-      id: "kshita", name: "旧都の下町",
-      desc: "商店と住宅の入り組んだ街",
+      id: "kshita", name: "エリー都・下町",
+      desc: "商店と住宅の入り組んだ、人情のある街",
       w: 0, old: 22, zone: "inside", sky: "shops",
       wealth: 0.5, exp: 0.2, crime: 0.3, edu: 0.5,
       med: 0.55, dis: 0.006,
     },
     {
-      id: "kzakkyo", name: "旧都の雑居街",
+      id: "kzakkyo", name: "エリー都・雑居街",
       desc: "建て増しの重なる雑居ビルの街",
       w: 0, old: 16, zone: "inside", sky: "zakkyo",
       wealth: 0.3, exp: 0.3, crime: 0.55, edu: 0.3,
