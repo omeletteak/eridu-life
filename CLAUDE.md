@@ -47,6 +47,22 @@ Fossil の「Rebase Considered Harmful」（https://fossil-scm.org/home/doc/trun
 - 履歴を書き換えない。rebase・amend・squash・force push をしない。間違えたら新しいコミットで直す（取り消しは `git revert`）
 - main へは「Create a merge commit」で入れる（Squash and merge と Rebase and merge は使わない）。
   作業ブランチを最新にするときも rebase ではなく、main を取り込むマージ（`git merge origin/main`）
+- マージも Fossil に寄せる。Fossil の `merge` は作業フォルダに取り込むだけでコミットしない。試してから `commit` する。
+  git では次のように置き換え、このリポジトリの git の設定（`.git/config`）でそう動くようにしてある
+  - `fossil update` ＝ `git pull`。早送りだけ（`pull.ff=only`）。未コミットの変更は退避して新しい先頭に載せ直す
+    （`merge.autoStash=true`）。ぶつかったら作業フォルダに衝突として残る
+  - 手元にもコミットがあって分かれていたら `git pull` は止まる（Fossil の fork にあたる）。そのときは
+    `git fetch` のあと `git merge origin/main` で取り込む
+  - `fossil merge` ＝ `git merge`。main の上では取り込むだけでコミットしない（`branch.main.mergeOptions=--no-commit`）。
+    早送りにせず必ずマージコミットを作る（`merge.ff=false`。Fossil の履歴と同じく、合流したことを残す）。
+    main 以外のブランチの上では設定が効かないので `git merge --no-commit` と書く
+  - 取り込んだら、下の「コミットの前に試す」とブラウザでの動作確認を済ませてから `git commit` でマージコミットを作る。
+    やめるときは `git merge --abort`（Fossil の `undo` にあたる）
+  - GitHub の PR は取り込みとコミットを分けられないので、マージボタンを押す前にブランチの側で試しておく
+- 改行は LF だけ。Windows の git が取り出すときに CRLF に変えないよう、このリポジトリでは `core.autocrlf=false` にしてある
+- 上の git の設定は `.git/config` にあり、clone し直すと消える。そのときは次で入れ直す：
+  `git config pull.ff only; git config merge.ff false; git config merge.autoStash true;`
+  `git config branch.main.mergeOptions --no-commit; git config core.autocrlf false`
 - コミットは小さく、1つのコミットに1つの事柄。メッセージには何を・なぜを書く
 - ブランチは合流したあとも消さない
 - 作業中のものも早めに push して見える場所に置く（手元で抱え込まない）
