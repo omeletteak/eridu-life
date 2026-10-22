@@ -21,7 +21,9 @@
 - `tools/choices.js`: 選択肢の総点検。すべての決断を、選択肢が変わる条件ごと（年齢・範囲の中外・家族が消息不明・店主など）に作り、
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す。決断の key と選択肢の ID・型の点検もする
-- `tools/fate.js`: 運命の点検。運命を持つ人をほかの人と並走させて歩かせた一生と、その道をひとりでたどった一生が同じかを比べる
+- `tools/fate.js`: 運命の点検。運命を持つ人をほかの人と並走させて歩かせた一生と、その道をひとりでたどった一生が同じかを比べる。
+  あわせて、決まった番号の一生の答え（`tools/fate-golden.json`）と比べ、動きが変わったのに `E.VERSION` が同じなら失敗にする
+  （版を上げ忘れると、前に歩かれた道が黙って違う一生になる）。版を上げたら `node tools/fate.js --golden` で答えを作り直す
 - `tools/style.js`: 書き方の点検（下の「コーディングスタイル」のうち機械で確かめられるもの）。`node tools/style.js [ファイル…]`
 - `lab/`: 試験版。本編と同じ js/ を読み、人の記録を SQLite（sql.js の in-memory データベース）にも置く。
   スマホで試すため、GitHub Pages の https://omeletteak.github.io/eridu-life/lab/ で開く（file:// では wasm を読めない）
@@ -36,7 +38,8 @@
     同じ番号をまったく同じ道で歩いた人がまだいなければ、最期の画面と前世の記録で住民番号の横に ✦ を出す（説明はしない）。
     番号を使い切るか版が変わったら次のシーズン（ワイプ。前のシーズンは消さない）。
     開発用：`lab/?ids=N` で1シーズンを N 人に、`&reborn=1` で必ず歩かれた番号に生まれる
-  - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
+  - `lab/console.js` / `lab/lab.css`: `lab/?sql` で開いたときだけ、画面の下に SQL を打てる欄と結果の表を出す
+    （番号や道が見えると気付く楽しみがなくなるので、ふだんは出さない）。データベースをファイルに保存できる
   - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
 - 住民番号は、亡くなるまで存在ごと出さない（住民票の見出しは「住民記録」だけ）。亡くなると住民票・最期の画面・前世の記録に出す（本編も lab も）
 - `Eridu.meSource(era, place)` / `Eridu.peerSource(me)`（ui.js が見る）: あれば、本人と同じ1秒の人を先にそこからもらう
@@ -94,7 +97,7 @@ Fossil の「Rebase Considered Harmful」（https://fossil-scm.org/home/doc/trun
 - コミットの前に試す：
   - `node tools/style.js`（問題なし）
   - `node tools/choices.js -n 200`（エラー 0件）
-  - `node tools/fate.js`（違い 0人。同じ fate・同じ選択なら、並走しても同じ一生になるか）
+  - `node tools/fate.js`（違い 0人、版の答えと同じ。動きを変えたら `E.VERSION` を上げて `--golden`）
   - 動きを変えないつもりの変更は、`node tools/simulate.js --seed 1`（`--era old` も）の出力を前後で比べて一致を確かめる
 - PR #1〜#3 はこの決まりの前に rebase でマージした。履歴は書き換えないので、そのまま残す
 

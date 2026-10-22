@@ -185,6 +185,22 @@
   };
 
   /*
+  ** データベースの用意ができるまでは「生まれる」を押せないようにする
+  ** （用意の前に生まれると、番号から決まる人にならないため）。読み込めな
+  ** かったときは押せるように戻す（いつもどおりその場で生まれる）。
+  */
+  const born = document.getElementById("bornBtn");
+  born.disabled = true;
+  E.dbReady.then(
+    () => {
+      born.disabled = false;
+    },
+    () => {
+      born.disabled = false;
+    }
+  );
+
+  /*
   ** 今のシーズンの番号と、時代ごとの歩かれていない番号の数を返す
   ** （lab の画面の表示用）。
   */

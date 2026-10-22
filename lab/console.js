@@ -1,5 +1,6 @@
 /*
-** lab：画面の下に、SQLite の中身を見る欄を出す。
+** lab：?sql を付けて開いたときだけ、画面の下に SQLite の中身を見る欄を出す
+** （ふだんは出さない。番号や道が見えると、気付く楽しみがなくなるため）。
 ** db.js を先に読み込むこと（Eridu.db と Eridu.dbReady を使う）。
 ** よく使う問い合わせのボタン、SQL を打つ欄、結果の表、
 ** データベースをファイルに保存するボタンを置く。
@@ -155,12 +156,8 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
 
-    /* 用意ができるまでは生まれられない（表に入らない人を作らない） */
-    const born = document.getElementById("bornBtn");
-    born.disabled = true;
     E.dbReady.then(
       () => {
-        born.disabled = false;
         const i = E.labInfo();
         const left = `いま ${i.left.now} · 陥落の前 ${i.left.old}`;
         status.textContent =
@@ -168,7 +165,6 @@
           `${left}）。遊んだ記録はこの端末に残ります。`;
       },
       e => {
-        born.disabled = false;
         const where =
           location.protocol === "file:"
             ? "file:// で開くと wasm を読み込めません。GitHub Pages で開いてください。"
@@ -179,5 +175,7 @@
     );
   }
 
-  mount();
+  if( new URLSearchParams(location.search).has("sql") ){
+    mount();
+  }
 })();
