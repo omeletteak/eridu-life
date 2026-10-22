@@ -641,18 +641,33 @@
     }catch(e){}
   }
 
-  /* 前世の記録を描く。 */
+  /*
+  ** 文字列 s を HTML に入れられるように置き換えて返す（& < > " '）。
+  ** 前世の記録のように localStorage から読んだものを出すときに使う
+  ** （書き換えられていても、HTML として動かないように）。
+  */
+  const esc = s =>
+    String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  /* 前世の記録を描く。localStorage から読んだ値はすべて esc を通す。 */
   function renderMemorial(){
     const m = loadMem();
     $("memorial").innerHTML = m.length
       ? m
           .map(x => {
             /* 住民番号と印は、あとから足したので古い記録にはない */
-            const no = x.no ? `No.${x.no} · ` : "";
+            const no = x.no ? `No.${esc(x.no)} · ` : "";
             const mark = x.m ? `<span class="mark" aria-hidden="true">✦</span>` : "";
+            const who = `${esc(x.n)}（${esc(x.t)}）`;
+            const end = `${esc(x.d)} · ${esc(x.a)}歳 · ${esc(x.c)}`;
             return (
-              `<div><span>${x.n}（${x.t}）${mark}</span>` +
-              `<span>${no}${x.d} · ${x.a}歳 · ${x.c}</span></div>`
+              `<div><span>${who}${mark}</span>` +
+              `<span>${no}${end}</span></div>`
             );
           })
           .join("")
