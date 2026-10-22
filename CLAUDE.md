@@ -21,20 +21,27 @@
 - `tools/choices.js`: 選択肢の総点検。すべての決断を、選択肢が変わる条件ごと（年齢・範囲の中外・家族が消息不明・店主など）に作り、
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す。決断の key と選択肢の ID・型の点検もする
+- `tools/fate.js`: 運命の点検。運命を持つ人をほかの人と並走させて歩かせた一生と、その道をひとりでたどった一生が同じかを比べる
 - `tools/style.js`: 書き方の点検（下の「コーディングスタイル」のうち機械で確かめられるもの）。`node tools/style.js [ファイル…]`
 - `lab/`: 試験版。本編と同じ js/ を読み、人の記録を SQLite（sql.js の in-memory データベース）にも置く。
   スマホで試すため、GitHub Pages の https://omeletteak.github.io/eridu-life/lab/ で開く（file:// では wasm を読めない）
   - `lab/index.html`: `eridu-life.html` の写し（パスを `../` に、lab の script と注記を足したもの）。本編のマークアップを変えたらこちらも合わせる
-  - `lab/db.js`: 表を作り、`Eridu.hooks` で受け取った生まれ・記録の文・選択・1年の終わりを書く。表の設計は `docs/schema.md`。
-    データベースは localStorage に丸ごと保存して読み戻す。住民番号はシーズンごとに順に配り、使い切ったら次のシーズン
-    （ワイプ。前のシーズンは消さない）。`lab/?ids=N` で1シーズンを N 人にできる（ワイプの確認用）
-  - `lab/ghosts.js`: 同じ1秒に生まれた4人を、遊び終えた一生（ほかのプレイヤーを先に、なければこの端末の前世）から選ぶ
-    （`Eridu.peerSource`）。記録（years・picks）を1年ずつたどるだけで乱数を使わない。陥落の前の時代は陥落の年齢が本人と
-    同じ一生だけ（本人の年齢は前の一生に合わせない。合わせるとうつり合って一つの年齢に固まる）。足りない分は ui.js がその場で生む
+  - `lab/db.js`: 表を作り、本人が歩いた番号と道（選んだ選択肢の ID の並び）と記録を書く。表の設計は `docs/schema.md`。
+    データベースは localStorage に丸ごと保存して読み戻す
+  - `lab/fate.js`: 世界は先に決まっていて、プレイヤーは一本の道を歩くだけ、という仕組み（`Eridu.meSource` / `peerSource`）。
+    シーズン・版・時代・住民番号から生まれと運命が決まる（sim.js の fate）。番号は5つずつの組で、同じ組の5人が同じ1秒に
+    生まれた人たち（陥落の年齢も組で同じ）。本人はまだ歩かれていない番号の小さいものから。20% はもう歩かれた番号に生まれる
+    （同じ人をもう一度生きる）。4人は、歩かれた番号ならその道をたどり、なければ運命が選ぶ道を行く（見た目で区別しない）。
+    番号を使い切るか版が変わったら次のシーズン（ワイプ。前のシーズンは消さない）。
+    開発用：`lab/?ids=N` で1シーズンを N 人に、`&reborn=1` で必ず歩かれた番号に生まれる
   - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
   - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
-- `Eridu.peerSource(me)`（ui.js が見る）: あれば、同じ1秒の人を先にそこからもらう。`q.replay(q)` を持つ人は step せずに
-  それで1年進める（`stepPeer`）。`q.tag` は名前の後ろに出す印。本編では置かない
+- `Eridu.meSource(era, place)` / `Eridu.peerSource(me)`（ui.js が見る）: あれば、本人と同じ1秒の人を先にそこからもらう
+  （開発用の `?fall` では使わない）。`q.tag` は名前の後ろに出す印。本編ではどれも置かない
+- 運命（js/sim.js）: `newPerson(era, isPeer, placeId, fate)` に fate を渡すと、生まれは fate から、1年ごとの乱数は fate と年齢から
+  決まり、ほかの人の乱数と混ざらない（`use(p)` で流れを切り替える。sim.js の公開の入口では必ず先に `use(p)`）。
+  `p.route`（選択肢の ID の配列）があれば `autoChoose` はその道をたどる。画面の演出の乱数（`rnd`）は運命から引かない。
+  `E.VERSION` は動き（確率・効果・決断・乱数を引く順番）を変えたら上げる（lab では版が変わると新しいシーズン）
 - `Eridu.hooks`（js/sim.js）: 記録の差し込み口（born / said / pick / year）。既定は空で、本編の動きは変えない。
   選択肢を当てるときは画面からもランダムでも `apply(p, dec, o)` を通す（`o.fx` を直接呼ばない。tools/choices.js は例外）
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
@@ -84,6 +91,7 @@ Fossil の「Rebase Considered Harmful」（https://fossil-scm.org/home/doc/trun
 - コミットの前に試す：
   - `node tools/style.js`（問題なし）
   - `node tools/choices.js -n 200`（エラー 0件）
+  - `node tools/fate.js`（違い 0人。同じ fate・同じ選択なら、並走しても同じ一生になるか）
   - 動きを変えないつもりの変更は、`node tools/simulate.js --seed 1`（`--era old` も）の出力を前後で比べて一致を確かめる
 - PR #1〜#3 はこの決まりの前に rebase でマージした。履歴は書き換えないので、そのまま残す
 

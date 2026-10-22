@@ -11,8 +11,26 @@
   const PRESETS = [
     [
       "人",
-      "SELECT id, game, role, name, age, alive, cause, d, job\n" +
-        "FROM people ORDER BY id DESC LIMIT 20",
+      "SELECT p.id, g.season, p.era, p.no, p.name, p.age, p.alive, p.cause,\n" +
+        "  substr(g.player, 1, 8) AS player\n" +
+        "FROM people p JOIN games g ON g.id = p.game\n" +
+        "ORDER BY p.id DESC LIMIT 20",
+    ],
+    [
+      "番号",
+      "SELECT season, era, no, count(*) AS walks,\n" +
+        "  count(DISTINCT path) AS routes\n" +
+        "FROM people GROUP BY season, era, no\n" +
+        "ORDER BY walks DESC, no LIMIT 30",
+    ],
+    [
+      "道の主",
+      "SELECT p.season, p.era, p.no, p.path,\n" +
+        "  substr(g.player, 1, 8) AS first_player, g.born_at, g.version\n" +
+        "FROM people p JOIN games g ON g.id = p.game\n" +
+        "WHERE p.game IN (\n" +
+        "  SELECT min(game) FROM people GROUP BY season, era, no, path)\n" +
+        "ORDER BY p.no LIMIT 30",
     ],
     [
       "選択",
@@ -25,24 +43,15 @@
     [
       "記録",
       "SELECT age, text FROM log\n" +
-        "WHERE person = (SELECT max(id) FROM people WHERE role = 'me')\n" +
+        "WHERE person = (SELECT max(id) FROM people)\n" +
         "ORDER BY id DESC LIMIT 30",
     ],
     [
-      "型ごと",
-      "SELECT k.grp, count(*) AS n\n" +
-        "FROM picks x\n" +
-        "JOIN options o ON o.id = x.opt\n" +
-        "JOIN kinds k ON k.id = o.t\n" +
-        "GROUP BY k.grp ORDER BY n DESC",
-    ],
-    [
       "シーズン",
-      "SELECT s.id, s.no_min, s.no_max, s.started_at, s.ended_at,\n" +
-        "  count(p.id) AS people, count(DISTINCT g.player) AS players\n" +
-        "FROM seasons s\n" +
-        "LEFT JOIN people p ON p.season = s.id\n" +
-        "LEFT JOIN games g ON g.id = p.game\n" +
+      "SELECT s.id, s.version, s.no_min, s.no_max, s.started_at,\n" +
+        "  s.ended_at, count(g.id) AS walks,\n" +
+        "  count(DISTINCT g.player) AS players\n" +
+        "FROM seasons s LEFT JOIN games g ON g.season = s.id\n" +
         "GROUP BY s.id ORDER BY s.id",
     ],
     [
@@ -50,6 +59,7 @@
       "SELECT name, sql FROM sqlite_master WHERE type = 'table'",
     ],
   ];
+
 
   /* 文字列 s を HTML に入れられるように置き換えて返す。 */
   const esc = s =>
@@ -151,10 +161,11 @@
     E.dbReady.then(
       () => {
         born.disabled = false;
-        const i = E.dbInfo();
+        const i = E.labInfo();
+        const left = `いま ${i.left.now} · 陥落の前 ${i.left.old}`;
         status.textContent =
-          `用意ができました。シーズン ${i.season}（住民番号の残り ${i.left}）。` +
-          "遊んだ記録はこの端末に残ります。";
+          `用意ができました。シーズン ${i.season}（歩かれていない番号：` +
+          `${left}）。遊んだ記録はこの端末に残ります。`;
       },
       e => {
         born.disabled = false;
