@@ -155,8 +155,7 @@
 
   /*
   ** 同じ1秒に生まれた4人の今を描く（生きていれば年齢と仕事、
-  ** 亡くなっていれば死因）。q.tag があれば名前の後ろに添える
-  ** （lab で、ほかのプレイヤーの一生だと示すため）。
+  ** 亡くなっていれば死因）。
   */
   function renderPeers(){
     $("peers").innerHTML = peers
@@ -164,10 +163,9 @@
         const now = q.alive
           ? q.age + "歳 · " + JOBS[q.job].name
           : q.age + "歳 " + q.cause;
-        const tag = q.tag ? `<span class="tag">${q.tag}</span>` : "";
         return (
           `<div class="peer ${q.alive ? "" : "dead"}">` +
-          `<span class="who">${q.name}${tag}　` +
+          `<span class="who">${q.name}　` +
           `<span class="muted">${q.d.name}・${kindOf(q)}</span></span>` +
           `<span class="st">${now}</span></div>`
         );
@@ -424,10 +422,9 @@
     const rows = people
       .map((x, i) => {
         const lost = x.q.flags.familyLost ? " · 家族は消息不明" : "";
-        const tag = x.q.tag ? `<span class="tag">${x.q.tag}</span>` : "";
         return (
           `<div class="peer${x.self ? " self" : ""}">` +
-          `<span class="who">${x.who}${tag}　` +
+          `<span class="who">${x.who}　` +
           `<span class="muted">${x.q.fallChoice || ""}${lost}</span></span>` +
           `<span class="st checking" id="sf${i}">確認中…</span></div>`
         );

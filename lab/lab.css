@@ -71,14 +71,3 @@
   font-family: var(--f-mono);
   font-size: 12px;
 }
-
-/* 同じ1秒の人が、ほかのプレイヤーの一生や前世のときの印 */
-.peer .tag {
-  margin-left: 6px;
-  padding: 0 6px;
-  font-size: 11px;
-  color: var(--ether);
-  border: 1px solid var(--ether);
-  border-radius: 999px;
-  white-space: nowrap;
-}
