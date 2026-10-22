@@ -523,15 +523,11 @@
   }
 
   /*
-  ** 同じ1秒に生まれた人 q を1年進める。q.replay があれば（lab で、
-  ** ほかのプレイヤーの一生をたどるとき）それに任せる。なければ step して、
-  ** 決断が来たらランダムに選び、陥落なら選択と安否を残す。
+  ** 同じ1秒に生まれた人 q を1年進める。step して、決断が来たら
+  ** ランダムに選び（lab で前に誰かが歩いた人なら、その道をたどる）、
+  ** 陥落なら選択と安否を残す。
   */
   function stepPeer(q){
-    if( q.replay ){
-      q.replay(q);
-      return;
-    }
     step(q);
     const d = decisionFor(q);
     if( d ){
@@ -561,13 +557,7 @@
     stopAlarm();
     /* 残りの人たちを最後まで流す */
     for(const q of peers){
-      if( q.replay ){
-        while( q.alive ){
-          q.replay(q);
-        }
-      }else{
-        runToEnd(q);
-      }
+      runToEnd(q);
     }
     renderAll();
     const p = me;
@@ -773,7 +763,15 @@
     */
     const place =
       DEBUG_FALL === "near" || DEBUG_FALL === "far" ? "" : state.place;
-    me = newPerson(era, false, place);
+    /*
+    ** Eridu.meSource があれば（lab）、本人はそこからもらう（住民番号から
+    ** 決まる人）。開発用の ?fall では使わない
+    */
+    const src = window.Eridu.meSource;
+    me = src && DEBUG_FALL === null ? src(era, place) : null;
+    if( !me ){
+      me = newPerson(era, false, place);
+    }
     if( DEBUG_FALL === "near" || DEBUG_FALL === "far" ){
       const want = DEBUG_FALL === "near" ? "inside" : "outside";
       for(let i = 0; i < 200 && me.d.zone !== want; i++){
@@ -850,9 +848,13 @@
     ];
     /*
     ** 仮設住宅は必ず避難民の家庭。いまの時代のほかの街でも、旧都の
-    ** 生き残りは新都の側か郊外に移り住んだので一部はそう
+    ** 生き残りは新都の側か郊外に移り住んだので一部はそう。運命を持つ人
+    ** （lab）は、同じ人ならいつも同じになるよう運命から決める
     */
-    if( me.birthD.id === "camp" || (me.era !== "old" && Math.random() < 0.2) ){
+    const u = me.fate
+      ? window.Eridu.fateRng(me.fate + "|parents")()
+      : Math.random();
+    if( me.birthD.id === "camp" || (me.era !== "old" && u < 0.2) ){
       born.push({
         age: 0,
         text: "両親は旧都から逃れてきた人たちだった。",
