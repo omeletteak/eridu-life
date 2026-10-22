@@ -58,6 +58,33 @@ people ──┬── picks   （決断1回で1行）
 | lost_shop | 真偽 | 陥落で店を失った | `flags.lostShop` |
 | disaster | 真偽 | ホロウ災害の決断が控えている | `flags.disaster` |
 
+### players / seasons / games
+複数人で遊ぶ前提で、プレイヤーと一生の両方に id を持つ。
+
+| 表 | 欄 | 中身 |
+|---|---|---|
+| players | id, created_at | プレイヤー（遊ぶ人）。lab では端末ごとに1つ（localStorage） |
+| seasons | id, no_min, no_max, started_at, ended_at | シーズン。住民番号の範囲を持つ |
+| games | id, season, player, era, born_at | 一生（「生まれる」を押すたびに1つ）。どのプレイヤーの一生か |
+
+- 住民番号（people.no）はシーズンの中で順に配る（`UNIQUE(season, no)`）。
+  本人と4人の5つが残っていなければ、次のシーズンを始める（ワイプ）
+- ワイプしても前のシーズンの行は消さない。ended_at を書いて残す
+- people にも season を持たせる（番号の重なりを表で禁じるため）
+- 開発用に `lab/?ids=N` で、1シーズンを N 人で使い切ったことにできる
+
+### years（1人の1年で1行）
+| 欄 | 型 | 中身 |
+|---|---|---|
+| person | 整数 | → people.id |
+| age | 整数 | 年齢 |
+| alive | 真偽 | その年の終わりに生きていたか |
+| d / job | 文字 | 住所 / 仕事 |
+| hp / hap / eth / money | 数 | 健康 / 幸福 / 侵蝕 / 貯え |
+
+一生をあとから1年ずつたどるための表（同じ1秒の4人をほかのプレイヤーの
+一生にする案で使う）。
+
 ### picks（決断1回で1行）
 | 欄 | 型 | 中身 |
 |---|---|---|
@@ -102,8 +129,7 @@ people ──┬── picks   （決断1回で1行）
 | text | 文字 | 文 |
 | cls | 文字 | 表示の種類（good / bad / eth / big） |
 
-`p.years`（寿命の帯に出す1年ごとの印 l / e / x）は、毎年の行を持つ表
-（`years`: person / age / mark）にするか、表示のときに log と picks から作る。
+`p.years`（寿命の帯に出す1年ごとの印 l / e / x）は、years の alive と eth から作れる。
 
 ### 決まった表
 | 表 | 今 | 変えること |
@@ -122,7 +148,10 @@ people ──┬── picks   （決断1回で1行）
 ## 置き場所
 表は SQLite の in-memory データベースに置く。
 
-- ブラウザ（`lab/`）：sql.js（`lab/vendor/`）。スマホで試すため GitHub Pages で開く
+- ブラウザ（`lab/`）：sql.js（`lab/vendor/`）。スマホで試すため GitHub Pages で開く。
+  書き込みのあと1秒待って、データベースを丸ごと localStorage に保存し、次に開いたときに読み戻す
+  （1回遊ぶと約70KB。上限の約5MBで70回ほど。入らなくなったら保存のエラーとして出し、遊ぶのは続けられる）。
+  表の形を変えたら `VERSION` を上げる。版が違う保存は読み戻さずに作り直す
 - Node（`tools/`）：同じ表を `node:sqlite` か sql.js で作る（まだ）
 
 計算の途中まで SQL にはしない。決断や出来事の `fx(p)` は
@@ -131,13 +160,14 @@ people ──┬── picks   （決断1回で1行）
 
 | とき | 書くもの |
 |---|---|
-| 初めて記録・選択・1年の終わりが来た | people に1行（本人なら games にも1行） |
+| 本人が生まれた | games と people に1行。住民番号を配る（足りなければ新しいシーズン） |
+| 4人に初めて記録・選択・1年の終わりが来た | people に1行。住民番号を配る |
 | say | log に1行 |
 | apply（選択肢を当てた） | options（初めての選択肢なら）と picks に1行、people を書き戻す |
-| step の終わり | people を書き戻す |
+| step の終わり | people を書き戻し、years に1行 |
 
 ### いま lab/ でできていること
-- 表：games / people / picks / log / districts / jobs / kinds / options
+- 表：players / seasons / games / people / years / picks / log / districts / jobs / kinds / options
 - people の `family_lost` などは、まだ `p.flags` から写している
   （flags をやめるのは下の進め方の 2〜3）
 - happenings はまだない（EVENTS に ID がないため）
@@ -154,6 +184,5 @@ people ──┬── picks   （決断1回で1行）
 変わらないことを確かめる。乱数を引く順番を変えないように注意する。
 
 ## 決めたいこと
-- `p.years` を表にするか、表示のときに作るか
 - 前世の記録（直近10件）に log まで残すか、people の行だけにするか
 - 書き出しを SQLite にするか CSV にするか（SQLite なら Node 標準の `node:sqlite`）

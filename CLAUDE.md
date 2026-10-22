@@ -25,7 +25,9 @@
 - `lab/`: 試験版。本編と同じ js/ を読み、人の記録を SQLite（sql.js の in-memory データベース）にも置く。
   スマホで試すため、GitHub Pages の https://omeletteak.github.io/eridu-life/lab/ で開く（file:// では wasm を読めない）
   - `lab/index.html`: `eridu-life.html` の写し（パスを `../` に、lab の script と注記を足したもの）。本編のマークアップを変えたらこちらも合わせる
-  - `lab/db.js`: 表を作り、`Eridu.hooks` で受け取った生まれ・記録の文・選択・1年の終わりを書く。表の設計は `docs/schema.md`
+  - `lab/db.js`: 表を作り、`Eridu.hooks` で受け取った生まれ・記録の文・選択・1年の終わりを書く。表の設計は `docs/schema.md`。
+    データベースは localStorage に丸ごと保存して読み戻す。住民番号はシーズンごとに順に配り、使い切ったら次のシーズン
+    （ワイプ。前のシーズンは消さない）。`lab/?ids=N` で1シーズンを N 人にできる（ワイプの確認用）
   - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
   - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
 - `Eridu.hooks`（js/sim.js）: 記録の差し込み口（born / said / pick / year）。既定は空で、本編の動きは変えない。

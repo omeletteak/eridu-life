@@ -37,6 +37,15 @@
         "GROUP BY k.grp ORDER BY n DESC",
     ],
     [
+      "シーズン",
+      "SELECT s.id, s.no_min, s.no_max, s.started_at, s.ended_at,\n" +
+        "  count(p.id) AS people, count(DISTINCT g.player) AS players\n" +
+        "FROM seasons s\n" +
+        "LEFT JOIN people p ON p.season = s.id\n" +
+        "LEFT JOIN games g ON g.id = p.game\n" +
+        "GROUP BY s.id ORDER BY s.id",
+    ],
+    [
       "表の一覧",
       "SELECT name, sql FROM sqlite_master WHERE type = 'table'",
     ],
@@ -136,12 +145,19 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
 
+    /* 用意ができるまでは生まれられない（表に入らない人を作らない） */
+    const born = document.getElementById("bornBtn");
+    born.disabled = true;
     E.dbReady.then(
       () => {
+        born.disabled = false;
+        const i = E.dbInfo();
         status.textContent =
-          "用意ができました。遊んでいる途中でも、終わったあとでも見られます。";
+          `用意ができました。シーズン ${i.season}（住民番号の残り ${i.left}）。` +
+          "遊んだ記録はこの端末に残ります。";
       },
       e => {
+        born.disabled = false;
         const where =
           location.protocol === "file:"
             ? "file:// で開くと wasm を読み込めません。GitHub Pages で開いてください。"
