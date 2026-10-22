@@ -1,6 +1,9 @@
 /*
 ** 画面：描画と操作、前世の記録。
 ** data.js・sim.js・skyline.js を先に読み込むこと。
+** 旧都陥落の演出は docs/fall.md、画面の決まり（住民番号を亡くなるまで
+** 出さないなど）は docs/overview.md。本編のマークアップを変えたら
+** lab/index.html も合わせる。
 */
 (() => {
   const {

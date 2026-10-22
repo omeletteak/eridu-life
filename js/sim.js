@@ -1,6 +1,12 @@
 /*
 ** シミュレーション：人の生成・決断・出来事・1年の進行。
 ** DOM には触らないので Node でも動く。data.js を先に読み込むこと。
+** 構成と決まりは docs/sim.md。変えるときに守ること：
+**   - 乱数は R() だけ。公開の入口では先に use(p)（運命の流れを切り替える）
+**   - 選択肢を当てるときは apply(p, dec, o) を通す
+**   - 選択肢の id と型は追記だけ。決断や選択肢を足したら tools/choices.js の
+**     SCENES にも場面を足す
+**   - 動きを変えたら E.VERSION を上げ、node tools/fate.js --golden
 */
 (function(E){
   const {DISTRICTS, GIVEN, FAMILY, THIREN_KIND, JOBS} = E;
