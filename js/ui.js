@@ -12,6 +12,7 @@
     decisionFor,
     aptLabel,
     autoChoose,
+    apply,
     step,
     fmt,
     runToEnd,
@@ -210,7 +211,7 @@
     */
     const choose = o => {
       box.innerHTML = "";
-      o.fx(me);
+      apply(me, dec, o);
       if( dec.alarm ){
         me.fallChoice = o.label;
         me.fallSurvived = me.alive;

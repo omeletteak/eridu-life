@@ -44,6 +44,24 @@
     R = fn;
   };
 
+  /*
+  ** 記録の差し込み口。lab/ の SQLite 版などが関数を入れる。既定は空で、
+  ** 何も入っていなければ何もしない（動きも乱数を引く順番も変えない）。
+  **
+  **   born(p)            newPerson が p を作った直後
+  **   said(p, text, cls) say が呼ばれたとき（同じ1秒の4人の分も）
+  **   pick(p, dec, o)    決断 dec の選択肢 o を当てた直後（apply から）
+  **   year(p)            step が p の1年を終えたとき
+  */
+  E.hooks = {};
+
+  /* E.hooks の name があれば、残りの引数で呼ぶ。 */
+  function hook(name, ...args){
+    if( E.hooks[name] ){
+      E.hooks[name](...args);
+    }
+  }
+
   /* 今の乱数を一つ返す。ui.js など sim.js の外から使う。 */
   const rnd = () => R();
 
@@ -181,14 +199,17 @@
       no: Math.floor(R() * 9e5) + 1e5,
     };
     p.log = [];
+    hook("born", p);
     return p;
   }
 
   /*
   ** p の人生の記録に、今の年齢で text を足す。cls は表示の種類
-  ** （good / bad / eth / big を空白区切りで）。isPeer の人には何もしない。
+  ** （good / bad / eth / big を空白区切りで）。isPeer の人は記録に足さない
+  ** （hooks.said には渡す）。
   */
   function say(p, text, cls = ""){
+    hook("said", p, text, cls);
     if( p.isPeer ){
       return;
     }
@@ -1427,8 +1448,17 @@
   */
   function autoChoose(p, dec){
     const o = pick(dec.opts);
-    o.fx(p);
+    apply(p, dec, o);
     return o;
+  }
+
+  /*
+  ** 決断 dec の選択肢 o を p に当てる（o.fx を呼び、hooks.pick に知らせる）。
+  ** 選択肢を当てるときは、画面からもランダムでも必ずこれを通す。
+  */
+  function apply(p, dec, o){
+    o.fx(p);
+    hook("pick", p, dec, o);
   }
 
   /* ===== ランダムな出来事 ===== */
@@ -1686,6 +1716,7 @@
     /* エーテリアス化 */
     if( p.alive && p.eth >= 100 ){
       die(p, "エーテリアス化");
+      hook("year", p);
       return;
     }
     /* 死亡判定 */
@@ -1711,6 +1742,7 @@
       }
     }
     p.years.push(p.alive ? (p.eth >= 60 ? "e" : "l") : "x");
+    hook("year", p);
   }
 
   /* step の死亡判定で亡くなった p の死因を、年齢と仕事から選んで返す。 */
@@ -1791,6 +1823,7 @@
     KINDS,
     aptLabel,
     autoChoose,
+    apply,
     EVENTS,
     step,
     naturalCause,
