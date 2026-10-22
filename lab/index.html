@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>新エリー都の一生 lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="brand">New Eridu civic record · 非公式ファン作品</div>
+    <h1>新エリー都の一生</h1>
+  </header>
+
+  <!-- スタート -->
+  <section id="start" class="card"
+           style="display:flex;flex-direction:column;gap:16px">
+    <p>ホロウと隣り合う都市に、ひとりの赤ちゃんが生まれます。人間かシリオンか、どんな家に生まれるかは選べません。数年ごとに訪れる決断だけを選び、最期まで見届けてください。</p>
+    <div>
+      <label class="lbl">生まれる時代</label>
+      <div class="seg" id="eraSeg">
+        <button data-v="now" aria-pressed="true">いまの新エリー都</button>
+        <button data-v="old" aria-pressed="false">旧都陥落の前</button>
+      </div>
+    </div>
+    <div>
+      <label class="lbl" for="placeSel">生まれる場所</label>
+      <select id="placeSel" class="sel"></select>
+      <p class="muted place-note" id="placeNote"></p>
+    </div>
+    <div>
+      <label class="lbl">1年の速さ</label>
+      <div class="seg" id="paceSeg">
+        <button data-v="1600" aria-pressed="false">ゆっくり</button>
+        <button data-v="1000" aria-pressed="true">ふつう</button>
+        <button data-v="450" aria-pressed="false">はやい</button>
+      </div>
+    </div>
+    <div>
+      <label class="lbl">ネタバレ</label>
+      <div class="seg" id="spoilerSeg">
+        <button data-v="off" aria-pressed="true">なし</button>
+        <button data-v="on" aria-pressed="false">あり</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:6px">「あり」にすると、旧都陥落の場面に組織の名前が出ます（シーズン2序盤までの内容）。</p>
+    </div>
+    <div class="row"><button class="btn" id="bornBtn">生まれる</button></div>
+    <p class="muted" style="font-size:12px">数字はゲーム用の架空の統計です。死や暴力、病気も確率どおりに起こりますが、場面は描きません。</p>
+  </section>
+
+  <!-- プレイ -->
+  <section id="game" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="card idcard" id="idcard"></div>
+    <div id="decision"></div>
+    <div class="card"><div class="stats" id="stats"></div></div>
+    <div class="controls">
+      <button class="btn" id="pauseBtn">一時停止</button>
+      <div class="seg" id="speedSeg">
+        <button data-v="1" aria-pressed="true">1×</button>
+        <button data-v="2" aria-pressed="false">2×</button>
+        <button data-v="4" aria-pressed="false">4×</button>
+        <button data-v="8" aria-pressed="false">8×</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="eyebrow" style="margin-bottom:6px">人生の記録 · 新しい順</div>
+      <div class="logbox"><ul class="log" id="log"></ul></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow" style="margin-bottom:8px">同じ1秒に生まれた人たち</div>
+      <div class="peers" id="peers"></div>
+    </div>
+  </section>
+
+  <!-- 最期 -->
+  <section id="end" hidden
+           style="display:flex;flex-direction:column;gap:16px"></section>
+
+  <section class="card" id="memorialCard">
+    <div class="eyebrow" style="margin-bottom:8px">前世の記録 · この端末だけ</div>
+    <div class="mem" id="memorial"></div>
+  </section>
+
+  <p class="muted lab-note">試験版（lab）：人の記録を SQLite の in-memory データベースに置いています。下の欄で中身を見られます。本編は <a href="../">こちら</a>。</p>
+
+  <footer>ゼンレスゾーンゼロの世界観をもとにした非公式のファン作品です。公式とは関係ありません。</footer>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/sim.js"></script>
+<script src="vendor/sql-wasm.js"></script>
+<script src="db.js"></script>
+<script src="../js/skyline.js"></script>
+<script src="../js/ui.js"></script>
+<script src="console.js"></script>
+</body>
+</html>
