@@ -150,7 +150,8 @@
 
   /*
   ** 同じ1秒に生まれた4人の今を描く（生きていれば年齢と仕事、
-  ** 亡くなっていれば死因）。
+  ** 亡くなっていれば死因）。q.tag があれば名前の後ろに添える
+  ** （lab で、ほかのプレイヤーの一生だと示すため）。
   */
   function renderPeers(){
     $("peers").innerHTML = peers
@@ -158,9 +159,10 @@
         const now = q.alive
           ? q.age + "歳 · " + JOBS[q.job].name
           : q.age + "歳 " + q.cause;
+        const tag = q.tag ? `<span class="tag">${q.tag}</span>` : "";
         return (
           `<div class="peer ${q.alive ? "" : "dead"}">` +
-          `<span class="who">${q.name}　` +
+          `<span class="who">${q.name}${tag}　` +
           `<span class="muted">${q.d.name}・${kindOf(q)}</span></span>` +
           `<span class="st">${now}</span></div>`
         );
@@ -417,9 +419,10 @@
     const rows = people
       .map((x, i) => {
         const lost = x.q.flags.familyLost ? " · 家族は消息不明" : "";
+        const tag = x.q.tag ? `<span class="tag">${x.q.tag}</span>` : "";
         return (
           `<div class="peer${x.self ? " self" : ""}">` +
-          `<span class="who">${x.who}　` +
+          `<span class="who">${x.who}${tag}　` +
           `<span class="muted">${x.q.fallChoice || ""}${lost}</span></span>` +
           `<span class="st checking" id="sf${i}">確認中…</span></div>`
         );
@@ -504,15 +507,7 @@
     step(me);
     for(const q of peers){
       if( q.alive ){
-        step(q);
-        const d = decisionFor(q);
-        if( d ){
-          const o = autoChoose(q, d);
-          if( d.alarm ){
-            q.fallChoice = o.label;
-            q.fallSurvived = q.alive;
-          }
-        }
+        stepPeer(q);
       }
     }
     renderAll();
@@ -525,6 +520,27 @@
       return;
     }
     schedule();
+  }
+
+  /*
+  ** 同じ1秒に生まれた人 q を1年進める。q.replay があれば（lab で、
+  ** ほかのプレイヤーの一生をたどるとき）それに任せる。なければ step して、
+  ** 決断が来たらランダムに選び、陥落なら選択と安否を残す。
+  */
+  function stepPeer(q){
+    if( q.replay ){
+      q.replay(q);
+      return;
+    }
+    step(q);
+    const d = decisionFor(q);
+    if( d ){
+      const o = autoChoose(q, d);
+      if( d.alarm ){
+        q.fallChoice = o.label;
+        q.fallSurvived = q.alive;
+      }
+    }
   }
 
   /* 次の1年を、1年の長さ ÷ 倍速 ミリ秒後に予約する。 */
@@ -545,7 +561,13 @@
     stopAlarm();
     /* 残りの人たちを最後まで流す */
     for(const q of peers){
-      runToEnd(q);
+      if( q.replay ){
+        while( q.alive ){
+          q.replay(q);
+        }
+      }else{
+        runToEnd(q);
+      }
     }
     renderAll();
     const p = me;
@@ -787,8 +809,13 @@
         me = newPerson(era, false, place);
       }
     }
-    /* 同じ1秒に生まれた人どうしで名前が重ならないようにする */
-    peers = [];
+    /*
+    ** 同じ1秒に生まれた人どうしで名前が重ならないようにする。
+    ** Eridu.peerSource があれば（lab）、先にそこから人をもらい
+    ** （ほかのプレイヤーの一生。本人の陥落の年齢を揃えることもある）、
+    ** 足りない分をこの場で生む。
+    */
+    peers = window.Eridu.peerSource ? window.Eridu.peerSource(me) : [];
     while( peers.length < 4 ){
       const q = newPerson(era, true);
       if( q.name !== me.name && !peers.some(x => x.name === q.name) ){
@@ -800,11 +827,7 @@
       q.fallAge = me.fallAge;
       /* 開発用に本人を先に進めた場合は、4人も同じ年齢まで進める */
       while( q.alive && q.age < me.age ){
-        step(q);
-        const d = decisionFor(q);
-        if( d ){
-          autoChoose(q, d);
-        }
+        stepPeer(q);
       }
     }
     ended = false;
