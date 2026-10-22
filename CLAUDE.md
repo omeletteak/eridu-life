@@ -28,8 +28,13 @@
   - `lab/db.js`: 表を作り、`Eridu.hooks` で受け取った生まれ・記録の文・選択・1年の終わりを書く。表の設計は `docs/schema.md`。
     データベースは localStorage に丸ごと保存して読み戻す。住民番号はシーズンごとに順に配り、使い切ったら次のシーズン
     （ワイプ。前のシーズンは消さない）。`lab/?ids=N` で1シーズンを N 人にできる（ワイプの確認用）
+  - `lab/ghosts.js`: 同じ1秒に生まれた4人を、遊び終えた一生（ほかのプレイヤーを先に、なければこの端末の前世）から選ぶ
+    （`Eridu.peerSource`）。記録（years・picks）を1年ずつたどるだけで乱数を使わない。陥落の前の時代は陥落の年齢が本人と
+    同じ一生だけ（本人の年齢は前の一生に合わせない。合わせるとうつり合って一つの年齢に固まる）。足りない分は ui.js がその場で生む
   - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
   - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
+- `Eridu.peerSource(me)`（ui.js が見る）: あれば、同じ1秒の人を先にそこからもらう。`q.replay(q)` を持つ人は step せずに
+  それで1年進める（`stepPeer`）。`q.tag` は名前の後ろに出す印。本編では置かない
 - `Eridu.hooks`（js/sim.js）: 記録の差し込み口（born / said / pick / year）。既定は空で、本編の動きは変えない。
   選択肢を当てるときは画面からもランダムでも `apply(p, dec, o)` を通す（`o.fx` を直接呼ばない。tools/choices.js は例外）
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）

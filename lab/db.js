@@ -88,6 +88,19 @@ CREATE TABLE log(
 );
 `;
 
+  /*
+  ** あとから足した表。版を上げずに、読み戻したデータベースにも足す。
+  ** cohort は、一生（game）の同じ1秒に、ほかのプレイヤーの一生（person）を
+  ** 並べたという記録。
+  */
+  const ADDED = `
+CREATE TABLE IF NOT EXISTS cohort(
+  game INTEGER REFERENCES games(id),
+  person INTEGER REFERENCES people(id),
+  PRIMARY KEY(game, person)
+);
+`;
+
   /* localStorage の置き場所。DB_KEY はデータベース、PLAYER_KEY はこの端末のプレイヤー */
   const DB_KEY = "eridu-lab-db";
   const PLAYER_KEY = "eridu-lab-player";
@@ -265,8 +278,14 @@ CREATE TABLE log(
     return id;
   }
 
-  /* 今のシーズンの番号・残りの住民番号・この端末のプレイヤーを返す。 */
-  E.dbInfo = () => ({season, left: db ? remaining() : 0, player});
+  /*
+  ** 今のシーズンの番号・残りの住民番号・この端末のプレイヤー・
+  ** 今の一生（games.id）を返す。
+  */
+  E.dbInfo = () => ({season, left: db ? remaining() : 0, player, game});
+
+  /* 人 p の people.id を返す（まだ表になければ 0 か undefined）。 */
+  E.personId = p => ids.get(p);
 
   /* 記録の文を log に足す。 */
   E.hooks.said = (p, text, cls) => {
@@ -420,6 +439,7 @@ CREATE TABLE log(
       d.exec(SCHEMA);
       d.exec("PRAGMA user_version = " + VERSION);
     }
+    d.exec(ADDED);
     d.exec("PRAGMA foreign_keys = ON");
     db = d;
     fillFixed();
