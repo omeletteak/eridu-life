@@ -83,9 +83,11 @@
         `転出<small>旧都 → ${dest}</small></div>`
       : "";
     const deathStamp = p.alive ? "" : `<div class="stamp">${p.age}歳 没</div>`;
+    /* 住民番号は亡くなるまで伏せる（同じ番号に生まれ直しても気付かないように） */
+    const no = p.alive ? "······" : p.no;
     $("idcard").classList.toggle("slammed", !!slam);
     $("idcard").innerHTML = `
-   <div><div class="eyebrow">住民記録 No.${p.no}</div><div class="name">${p.name}</div></div>
+   <div><div class="eyebrow">住民記録 No.${no}</div><div class="name">${p.name}</div></div>
    <div class="age">${p.age}<small>歳</small></div>
    <dl>
     <dt>出生</dt><dd>${p.birthD.name} <span class="muted">· ${p.birthD.desc}</span></dd>
@@ -565,6 +567,11 @@
     const job = JOBS[p.job].name;
     const eth = Math.round(p.eth);
     const hap = Math.round(p.hap);
+    /*
+    ** p.mark があれば（lab で、誰も歩いていない道を歩き終えたとき）、
+    ** 住民番号の横に小さな印を出す。意味は説明しない
+    */
+    const mark = p.mark ? `<span class="mark" aria-hidden="true">✦</span>` : "";
     /* 人生地図。1マスが1年で、100年に満たなくても100マス出す */
     const map = Array.from(
       {length: Math.max(100, p.years.length)},
@@ -572,7 +579,7 @@
     ).join("");
     $("end").hidden = false;
     $("end").innerHTML = `<div class="card ending">
-    <div class="eyebrow">最期の記録</div>
+    <div class="eyebrow">最期の記録 · No.${p.no}${mark}</div>
     <h2>${p.name}、${p.age}歳</h2>
     <div class="cause">${p.cause}</div>
     <p>${p.d.name}で${kindOf(p)}として生まれ、最後の仕事は「${job}」でした。最期の侵蝕度は${eth}、幸福は${hap}。同じ1秒に生まれた4人のうち、あなたより長く生きたのは${longer}人です。</p>
@@ -612,7 +619,8 @@
 
   /*
   ** p の一生を前世の記録の先頭に足す。各要素は {n: 名前, a: 年齢,
-  ** c: 死因, d: 最期の地区, t: 人間かシリオンか}。書けなければ何もしない。
+  ** c: 死因, d: 最期の地区, t: 人間かシリオンか, no: 住民番号,
+  ** m: 最期の印があったか}。書けなければ何もしない。
   */
   function saveMemorial(p){
     try{
@@ -623,6 +631,8 @@
         c: p.cause,
         d: p.d.name,
         t: kindOf(p),
+        no: p.no,
+        m: !!p.mark,
       });
       localStorage.setItem(KEY, JSON.stringify(m.slice(0, 10)));
     }catch(e){}
@@ -633,11 +643,15 @@
     const m = loadMem();
     $("memorial").innerHTML = m.length
       ? m
-          .map(
-            x =>
-              `<div><span>${x.n}（${x.t}）</span>` +
-              `<span>${x.d} · ${x.a}歳 · ${x.c}</span></div>`
-          )
+          .map(x => {
+            /* 住民番号と印は、あとから足したので古い記録にはない */
+            const no = x.no ? `No.${x.no} · ` : "";
+            const mark = x.m ? `<span class="mark" aria-hidden="true">✦</span>` : "";
+            return (
+              `<div><span>${x.n}（${x.t}）${mark}</span>` +
+              `<span>${no}${x.d} · ${x.a}歳 · ${x.c}</span></div>`
+            );
+          })
           .join("")
       : `<p class="muted">まだ記録はありません。例：クロセ ミオ（猫のシリオン） · 郊外 · 47歳 · エーテリアス化</p>`;
   }

@@ -435,9 +435,15 @@ label.lbl {
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
 }
-.mem span:last-child {
+.mem div > span:last-child {
   color: var(--muted);
   text-align: right;
+}
+/* 最期の印（lab で、誰も歩いていない道を歩き終えたとき）。説明はしない */
+.mark {
+  margin-left: 4px;
+  color: var(--ether);
+  font-size: 0.9em;
 }
 footer {
   font-size: 12px;
