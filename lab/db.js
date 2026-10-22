@@ -19,10 +19,20 @@
 */
 (function(E){
   /*
-  ** 表の版。表の形を変えたら上げる。保存してあるデータベースの版が
-  ** 違えば、読み戻さずに作り直す（lab なので移し替えはしない）。
+  ** 表の版。表の形を変えたら上げ、MIGRATIONS にその版へ移す SQL を足す
+  ** （SCHEMA も新しい形に直す）。保存してあるデータベースは、読み戻す
+  ** ときに今の版まで順に移し替える。BASE より古いもの（設計を作り直す
+  ** 前の版）は移し替えられないので作り直す。
   */
   const VERSION = 3;
+  const BASE = 3;
+
+  /*
+  ** 版ごとの移し替え。キーが移し替えたあとの版、値がその SQL。
+  ** 例：{4: "ALTER TABLE people ADD COLUMN note TEXT;"}。
+  ** 足した列は、前の行では NULL になる。
+  */
+  const MIGRATIONS = {};
 
   /* 表を作る SQL。人が増えても欄は増やさない */
   const SCHEMA = `
@@ -347,8 +357,8 @@ CREATE TABLE log(
   }
 
   /*
-  ** 保存してあるデータベースを読み戻して返す。なければ、読めなければ、
-  ** 表の版が違えば null を返す。
+  ** 保存してあるデータベースを読み戻し、今の表の版まで移し替えて返す。
+  ** なければ、読めなければ、移し替えられない版なら null を返す。
   */
   function load(SQL){
     try{
@@ -357,10 +367,15 @@ CREATE TABLE log(
         return null;
       }
       const d = new SQL.Database(fromBase64(s));
-      const v = d.exec("PRAGMA user_version")[0].values[0][0];
-      if( v !== VERSION ){
+      let v = d.exec("PRAGMA user_version")[0].values[0][0];
+      if( v < BASE || v > VERSION ){
         d.close();
         return null;
+      }
+      while( v < VERSION ){
+        v++;
+        d.exec(MIGRATIONS[v] || "");
+        d.exec("PRAGMA user_version = " + v);
       }
       return d;
     }catch(e){
