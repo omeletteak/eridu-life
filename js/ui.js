@@ -74,7 +74,18 @@
     const moved = p.d.id !== p.birthD.id;
     const from = p.flags.survivor ? `<s class="muted">旧都</s> → ` : "";
     const addr = moved ? `<dt>住所</dt><dd>${from}${p.d.name}</dd>` : "";
-    const era = p.era === "old" ? "旧都陥落の前" : "いまの新エリー都";
+    /*
+    ** 陥落が起きるまでは、誰もまだ「旧都」と呼ばないので「エリー都」と書く。
+    ** 陥落を生き延びたか、見届けたか、陥落で亡くなったか、陥落の年齢を
+    ** 過ぎたら「旧都」
+    */
+    const fell =
+      p.flags.survivor ||
+      p.flags.witness ||
+      p.cause === "旧都陥落" ||
+      (p.fallAge !== null && p.age > p.fallAge);
+    const oldName = fell ? "旧都" : "エリー都";
+    const era = p.era === "old" ? oldName + "陥落の前" : "いまの新エリー都";
     const job = JOBS[p.job].name + (p.proxy ? " ＋ 裏稼業" : "");
     const family =
       (p.married ? "配偶者あり" : "ひとり") +
@@ -267,7 +278,7 @@
     "緊急警報 ／ 大規模ホロウの急速な拡大を観測 ／ 全市民はただちに避難を開始してください ／ 避難経路は治安局の誘導に従ってください ／ ";
   /* 範囲の外で流す、途切れがちなラジオのテロップ */
   const RADIO =
-    "……臨時ニュースです ／ 旧都で大規模なホロウの拡大が…… ／ ……繰り返します ／ 避難してきた方の受け入れ先は…… ／ ……現在、確認中です ／ ";
+    "……臨時ニュースです ／ エリー都で大規模なホロウの拡大が…… ／ ……繰り返します ／ 避難してきた方の受け入れ先は…… ／ ……現在、確認中です ／ ";
   /* 演出中の要素（ticker / flash / hollow / sky）。演出していなければ null */
   let alarm = null;
 

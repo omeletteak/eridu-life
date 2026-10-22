@@ -914,7 +914,7 @@
         return D.fallAlone(p);
       }
       const base = {
-        title: "旧都陥落",
+        title: "エリー都陥落",
         key: "fall",
         alarm: "near",
         text:
@@ -1092,11 +1092,11 @@
       return D.fallFarAlone(p);
     }
     const base = {
-      title: "旧都陥落",
+      title: "エリー都陥落",
       key: "fallFar",
       alarm: "far",
       text:
-        "旧都の方角の空に、見たことのない規模のホロウが広がっていきます。夜には、避難してきた人の列が" +
+        "エリー都の方角の空に、見たことのない規模のホロウが広がっていきます。夜には、避難してきた人の列が" +
         p.d.name +
         "にも届きはじめました。" +
         yamaLine(p),
@@ -1146,7 +1146,7 @@
             fx: p => {
               p.hap = clamp(p.hap - 3);
               fallWitness(p);
-              say(p, "旧都の方角の空を、毎晩眺めていた。");
+              say(p, "エリー都の方角の空を、毎晩眺めていた。");
             },
           },
         ],
@@ -1182,7 +1182,7 @@
         {
           id: "fallFar.search",
           t: "help",
-          label: "旧都へ人を探しに行く",
+          label: "エリー都へ人を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
             p.eth = clamp(p.eth + 20 * (1.4 - p.apt / 100));
@@ -1192,7 +1192,7 @@
               fallWitness(p);
               p.rel = clamp(p.rel + 20);
               p.hap = clamp(p.hap - 8);
-              say(p, "旧都の縁まで行き、はぐれた人を連れ帰った。", "big");
+              say(p, "エリー都の縁まで行き、はぐれた人を連れ帰った。", "big");
             }
           },
         },
@@ -1248,7 +1248,7 @@
       p,
       p.d.zone === "inside"
         ? "家族の消息が途絶えた。"
-        : "家族はその日、旧都に出かけていた。連絡がつかない。",
+        : "家族はその日、エリー都に出かけていた。連絡がつかない。",
       "bad big"
     );
   }
@@ -1260,7 +1260,7 @@
   */
   D.fallAlone = p => {
     const base = {
-      title: "旧都陥落",
+      title: "エリー都陥落",
       key: "fallAlone",
       alarm: "near",
       text:
@@ -1389,11 +1389,11 @@
   */
   D.fallFarAlone = p => {
     const base = {
-      title: "旧都陥落",
+      title: "エリー都陥落",
       key: "fallFarAlone",
       alarm: "far",
       text:
-        "旧都の方角の空に、見たことのない規模のホロウが広がっていきます。家族はその日、旧都に出かけていて、連絡がつきません。" +
+        "エリー都の方角の空に、見たことのない規模のホロウが広がっていきます。家族はその日、エリー都に出かけていて、連絡がつきません。" +
         yamaLine(p),
     };
     const a = p.age,
@@ -1452,7 +1452,7 @@
         {
           id: "fallFarAlone.go",
           t: "search",
-          label: "旧都へ家族を探しに行く",
+          label: "エリー都へ家族を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
             p.eth = clamp(p.eth + 25 * tol);
@@ -1461,7 +1461,7 @@
             }else{
               fallWitness(p);
               p.hap = clamp(p.hap - 10);
-              say(p, "旧都の縁まで行ったが、家族は見つからなかった。", "big");
+              say(p, "エリー都の縁まで行ったが、家族は見つからなかった。", "big");
             }
           },
         },
