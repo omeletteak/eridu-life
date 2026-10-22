@@ -201,10 +201,14 @@
   ** この年に p が迎える決断を返す。なければ null。
   ** 決断は D のどれかが作るオブジェクトで、
   **
-  **   title  見出し
+  **   title  見出し（年齢などが入るので、見分けには key を使う）
+  **   key    決断の種類（"school" や "fall" など。D の名前と同じ）
   **   text   状況の説明
-  **   opts   選択肢の配列。各要素は label（選択肢）/ sub（補足）/
-  **          fx（選んだときに p を変える関数）
+  **   opts   選択肢の配列。各要素は
+  **            id     選択肢の ID（"key.名前"）。ラベルが状況で変わっても同じ
+  **            t      選択肢の型（KINDS のキー）。時代をまたいで比べるのに使う
+  **            label  選択肢 / sub 補足
+  **            fx     選んだときに p を変える関数
   **   alarm  旧都陥落のときだけ。範囲の中は "near"、外は "far"
   **
   ** 同じ決断は一生に一度だけ出す（p.flags に印をつける）。優先順は
@@ -270,6 +274,34 @@
   }
 
   /*
+  ** 選択肢の型。違う決断や違う時代の選択を比べるための分け方。
+  ** name は文を作るときの呼び名、group は比べるときにまとめる単位
+  ** （「助ける」と「探す」は、危険を取って人のもとへ行く点で同じ組）。
+  **
+  ** 型と選択肢の ID は、共有した記録との互換のため追記だけにする
+  ** （名前を変えたり消したりしない）。
+  */
+  const KINDS = {
+    /* 危機のとき */
+    flee: {name: "逃げる", group: "flee"},
+    help: {name: "助ける", group: "reach"},
+    search: {name: "探す", group: "reach"},
+    guard: {name: "守る", group: "guard"},
+    share: {name: "分ける", group: "share"},
+    wait: {name: "待つ", group: "wait"},
+    shut: {name: "閉ざす", group: "shut"},
+    entrust: {name: "委ねる", group: "entrust"}, /* 一択。比べない */
+    /* 人生の節目 */
+    stable: {name: "安定", group: "stable"},
+    venture: {name: "挑む", group: "venture"},
+    stray: {name: "外れる", group: "stray"},
+    together: {name: "共に", group: "together"},
+    alone: {name: "ひとり", group: "alone"},
+    change: {name: "変える", group: "change"},
+    keep: {name: "続ける", group: "keep"},
+  };
+
+  /*
   ** 決断を作る関数の表。どれも p を受け取り、その人の状況に合わせた決断
   ** （decisionFor の説明を参照）を返す。
   */
@@ -277,6 +309,7 @@
     /* 15歳の進路。教育の水準（p.d.edu）で受験勉強の伸びが変わる。 */
     school: p => ({
       title: p.age + "歳 · 進路",
+      key: "school",
       text:
         "中学を終える年です。" +
         p.d.name +
@@ -285,6 +318,8 @@
           : "から通える進学先は多くありません。"),
       opts: [
         {
+          id: "school.study",
+          t: "stable",
           label: "進学校を目指して勉強する",
           sub:
             p.d.edu >= 0.5
@@ -304,6 +339,8 @@
           },
         },
         {
+          id: "school.parttime",
+          t: "together",
           label: "学校に通いながらバイトで稼ぐ",
           sub: "お金と人間関係",
           fx: p => {
@@ -315,6 +352,8 @@
           },
         },
         {
+          id: "school.wild",
+          t: "stray",
           label: "走り屋の仲間とつるむ",
           sub: "人間関係と幸福。危うい道",
           fx: p => {
@@ -340,6 +379,7 @@
       );
       return {
         title: p.age + "歳 · 仕事",
+        key: "work",
         text:
           "社会に出る年です。" +
           (p.thiren ? "シリオンへの採用の壁は、まだ残っています。" : "") +
@@ -348,6 +388,8 @@
           "」でした。",
         opts: [
           {
+            id: "work.corp",
+            t: "venture",
             label: "大手のホロウ調査企業を受ける",
             sub: "合格の見込み 約" + Math.round(corpChance) + "%",
             fx: p => {
@@ -362,6 +404,8 @@
             },
           },
           {
+            id: "work.build",
+            t: "stable",
             label: "建設・解体の現場で働く",
             sub: "そこそこの収入。少しずつ侵蝕",
             fx: p => {
@@ -375,6 +419,8 @@
             },
           },
           {
+            id: "work.police",
+            t: "help",
             label: "治安局に志願する",
             sub: p.hp >= 55 ? "体力は足りている" : "体力に不安",
             fx: p => {
@@ -388,6 +434,8 @@
             },
           },
           {
+            id: "work.raider",
+            t: "venture",
             label: "無許可でホロウに潜る",
             sub: "高収入。侵蝕と死の危険",
             fx: p => {
@@ -398,6 +446,8 @@
           ...(p.flags.wild
             ? [
                 {
+                  id: "work.gang",
+                  t: "stray",
                   label: "ギャングの仲間と生きる",
                   sub: "居場所はある。危険も多い",
                   fx: p => {
@@ -417,14 +467,19 @@
     /* 24歳の裏稼業（ホロウ内の道案内）の誘い。 */
     proxy: p => ({
       title: p.age + "歳 · 誘い",
+      key: "proxy",
       text: "顔見知りから、ホロウ内の道案内をする裏稼業の手伝いを頼まれました。報酬は悪くありません。",
       opts: [
         {
+          id: "proxy.decline",
+          t: "stable",
           label: "断る",
           sub: "何も変わらない",
           fx: p => say(p, "誘いを断った。"),
         },
         {
+          id: "proxy.accept",
+          t: "venture",
           label: "引き受ける",
           sub: "副収入。侵蝕と治安局の目",
           fx: p => {
@@ -450,9 +505,12 @@
       const bonus = grieving ? -5 : 20;
       return {
         title: p.age + "歳 · 家族",
+        key: "family",
         text,
         opts: [
           {
+            id: "family.together",
+            t: "together",
             label: "一緒に暮らす",
             sub: grieving
               ? "今は難しいかもしれない"
@@ -474,6 +532,8 @@
             },
           },
           {
+            id: "family.alone",
+            t: "alone",
             label: "ひとりで、ボンプと暮らす",
             sub: "気楽。老後は少し寂しい",
             fx: p => {
@@ -495,6 +555,7 @@
       const to = DISTRICTS.find(x => x.id === (preFall ? "kcenter" : "center"));
       return {
         title: p.age + "歳 · 転機",
+        key: "turn",
         text:
           "仕事は「" +
           JOBS[p.job].name +
@@ -503,6 +564,8 @@
           "です。",
         opts: [
           {
+            id: "turn.shop",
+            t: "venture",
             label: p.flags.lostShop
               ? "もう一度、自分の店を開く"
               : "自分の店を開く",
@@ -522,6 +585,8 @@
             },
           },
           {
+            id: "turn.keep",
+            t: "keep",
             label: "今の仕事を続ける",
             sub: "変化なし",
             fx: p => say(p, "同じ毎日を続けることにした。"),
@@ -529,6 +594,8 @@
           ...(p.d.id !== to.id
             ? [
                 {
+                  id: "turn.move",
+                  t: "change",
                   label: to.name + "へ引っ越す",
                   sub: "安全になる。家賃が重い",
                   fx: p => {
@@ -546,9 +613,12 @@
     /* 62歳の老後。引退するか働き続けるか。 */
     retire: p => ({
       title: p.age + "歳 · 老後",
+      key: "retire",
       text: "体の衰えを感じはじめています。",
       opts: [
         {
+          id: "retire.retire",
+          t: "stable",
           label: "引退する",
           sub: "穏やかに暮らす",
           fx: p => {
@@ -558,6 +628,8 @@
           },
         },
         {
+          id: "retire.work",
+          t: "keep",
           label: "働き続ける",
           sub: "お金は入る。体には負担",
           fx: p => {
@@ -584,11 +656,14 @@
       );
       return {
         title: "侵蝕の症状",
+        key: "ether",
         text:
           (p.d.med >= 0.5 ? "" : p.d.name + "の診療所で、") +
           "検査で侵蝕度が高いと言われました。皮膚に結晶のような斑点が出ています。",
         opts: [
           {
+            id: "ether.treat",
+            t: "stable",
             label: "高額な治療を受ける",
             sub:
               p.d.med >= 0.5
@@ -603,6 +678,8 @@
           },
           hollowWork
             ? {
+                id: "ether.quit",
+                t: "change",
                 label: "仕事を変えてホロウから離れる",
                 sub: "収入は減る",
                 fx: p => {
@@ -616,6 +693,8 @@
               }
             : p.d.id !== safe.id
               ? {
+                  id: "ether.move",
+                  t: "change",
                   label: safe.name + "へ引っ越す",
                   sub: "ホロウから遠い。家賃が重い",
                   fx: p => {
@@ -626,6 +705,8 @@
                   },
                 }
               : {
+                  id: "ether.indoors",
+                  t: "wait",
                   label: "外出を控える",
                   sub: "できるだけホロウに近づかない",
                   fx: p => {
@@ -636,6 +717,8 @@
                 },
           working
             ? {
+                id: "ether.endure",
+                t: "keep",
                 label: "我慢して働く",
                 sub: "いまの暮らしを守る",
                 fx: p => {
@@ -644,6 +727,8 @@
                 },
               }
             : {
+                id: "ether.wait",
+                t: "wait",
                 label: "様子を見る",
                 sub: "いまの暮らしを変えない",
                 fx: p => {
@@ -657,11 +742,14 @@
     /* 共生ホロウ災害。10歳未満は大人に連れられて避難する一択。 */
     disaster: p => ({
       title: "共生ホロウ災害",
+      key: "disaster",
       text: p.d.name + "の一角にホロウが発生しました。避難警報が鳴っています。",
       opts:
         p.age < 10
           ? [
               {
+                id: "disaster.carried",
+                t: "entrust",
                 label: "大人に連れられて避難する",
                 sub: "まだ自分では選べない",
                 fx: p => {
@@ -677,6 +765,8 @@
             ]
           : [
               {
+                id: "disaster.flee",
+                t: "flee",
                 label: "すぐに避難する",
                 sub: "安全を優先",
                 fx: p => {
@@ -690,6 +780,8 @@
                 },
               },
               {
+                id: "disaster.back",
+                t: "help",
                 label: "家族や近所の人を探しに戻る",
                 sub: "人間関係が深まる。危険",
                 fx: p => {
@@ -721,6 +813,7 @@
       }
       const base = {
         title: "旧都陥落",
+        key: "fall",
         alarm: "near",
         text:
           "かつてない規模のホロウが都市を飲み込もうとしています。街じゅうが逃げ惑っています。" +
@@ -741,6 +834,8 @@
         }
       };
       const stay = {
+        id: "fall.stay",
+        t: "help",
         label: "残って人を助ける",
         sub: "多くを救えるかもしれない",
         fx: p => {
@@ -761,6 +856,8 @@
           text: base.text + "まだ幼いあなたに、選べることはありません。",
           opts: [
             {
+              id: "fall.hand",
+              t: "entrust",
               label: "親の手を握る",
               sub: "大人たちに任せる",
               fx: flee(0.2, "親に手を引かれて、避難の列に並んだ。"),
@@ -773,11 +870,15 @@
           ...base,
           opts: [
             {
+              id: "fall.close",
+              t: "flee",
               label: "家族とはぐれないようにする",
               sub: "手を離さない",
               fx: flee(0.17, "家族の背中だけを見て歩き、新しい都市に着いた。"),
             },
             {
+              id: "fall.friend",
+              t: "help",
               label: "友だちを探しに戻る",
               sub: "見つけられるかもしれない。危険",
               fx: p => {
@@ -800,6 +901,8 @@
           ...base,
           opts: [
             {
+              id: "fall.flee",
+              t: "flee",
               label: "避難の列に並ぶ",
               sub: "生き延びることだけを考える",
               fx: flee(0.18, "すべてを置いて、新しい都市へ逃れた。"),
@@ -813,12 +916,16 @@
         ...base,
         opts: [
           {
+            id: "fall.flee",
+            t: "flee",
             label: "避難の列に並ぶ",
             sub: "生き延びることだけを考える",
             fx: flee(0.18, "すべてを置いて、新しい都市へ逃れた。"),
           },
           fam
             ? {
+                id: "fall.famfirst",
+                t: "help",
                 label: "家族を先に逃がす",
                 sub: "自分は最後になる",
                 fx: p => {
@@ -837,6 +944,8 @@
                 },
               }
             : {
+                id: "fall.neighbors",
+                t: "help",
                 label: "近所の人を連れて逃げる",
                 sub: "足の遅い人に合わせる",
                 fx: p => {
@@ -850,6 +959,8 @@
                 },
               },
           {
+            id: "fall.goods",
+            t: "guard",
             label:
               p.job === "owner" ? "店を守ろうとする" : "家財を持ち出そうとする",
             sub: "財産を少しでも残せる。危険",
@@ -880,6 +991,7 @@
     }
     const base = {
       title: "旧都陥落",
+      key: "fallFar",
       alarm: "far",
       text:
         "旧都の方角の空に、見たことのない規模のホロウが広がっていきます。夜には、避難してきた人の列が" +
@@ -893,6 +1005,8 @@
         ...base,
         opts: [
           {
+            id: "fallFar.adults",
+            t: "entrust",
             label: "大人たちのそばにいる",
             sub: "何が起きているのかは、まだわからない",
             fx: p => {
@@ -908,6 +1022,8 @@
         ...base,
         opts: [
           {
+            id: "fallFar.cook",
+            t: "share",
             label: "炊き出しを手伝う",
             sub: "できることをする",
             fx: p => {
@@ -921,6 +1037,8 @@
             },
           },
           {
+            id: "fallFar.watch",
+            t: "wait",
             label: "遠くの空を見ていた",
             sub: "目が離せない",
             fx: p => {
@@ -936,6 +1054,8 @@
       ...base,
       opts: [
         {
+          id: "fallFar.share",
+          t: "share",
           label: "受け入れて食料を分ける",
           sub: "人間関係が深まる。貯えが減る",
           fx: p => {
@@ -947,6 +1067,8 @@
           },
         },
         {
+          id: "fallFar.distance",
+          t: "shut",
           label: "距離を置く",
           sub: "いまの暮らしを守る",
           fx: p => {
@@ -956,6 +1078,8 @@
           },
         },
         {
+          id: "fallFar.search",
+          t: "help",
           label: "旧都へ人を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
@@ -973,6 +1097,8 @@
         ...(p.job === "owner"
           ? [
               {
+                id: "fallFar.shopcook",
+                t: "share",
                 label: "店を開けて炊き出しをする",
                 sub: "貯えは大きく減る",
                 fx: p => {
@@ -1033,6 +1159,7 @@
   D.fallAlone = p => {
     const base = {
       title: "旧都陥落",
+      key: "fallAlone",
       alarm: "near",
       text:
         "かつてない規模のホロウが都市を飲み込もうとしています。家族の姿は、もうどこにもありません。" +
@@ -1069,6 +1196,8 @@
         text: base.text + "まだ幼いあなたに、選べることはありません。",
         opts: [
           {
+            id: "fallAlone.stranger",
+            t: "entrust",
             label: "知らない大人の手を握る",
             sub: "誰かが手を差し出している",
             fx: flee(0.25, "見知らぬ大人に手を引かれて、避難の列に並んだ。"),
@@ -1081,6 +1210,8 @@
         ...base,
         opts: [
           {
+            id: "fallAlone.flee",
+            t: "flee",
             label: "ひとりで避難の列を探す",
             sub: "大人たちの流れについていく",
             fx: flee(
@@ -1089,6 +1220,8 @@
             ),
           },
           {
+            id: "fallAlone.home",
+            t: "search",
             label: "家族を探しに家へ戻る",
             sub: "誰かいるかもしれない。危険",
             fx: search(0.4, 30, "家には誰もいなかった。最後の列に飛び乗った。"),
@@ -1100,11 +1233,15 @@
       ...base,
       opts: [
         {
+          id: "fallAlone.flee",
+          t: "flee",
           label: "避難の列に並ぶ",
           sub: "家族を信じて先に逃げる",
           fx: flee(0.18, "家族の名前を呼びながら、避難の列に並んだ。"),
         },
         {
+          id: "fallAlone.search",
+          t: "search",
           label: "家族を探しに残る",
           sub: "見つけられるかもしれない。危険",
           fx: search(
@@ -1116,6 +1253,8 @@
         ...(a >= 40
           ? [
               {
+                id: "fallAlone.goods",
+                t: "guard",
                 label:
                   p.job === "owner"
                     ? "店を守ろうとする"
@@ -1149,6 +1288,7 @@
   D.fallFarAlone = p => {
     const base = {
       title: "旧都陥落",
+      key: "fallFarAlone",
       alarm: "far",
       text:
         "旧都の方角の空に、見たことのない規模のホロウが広がっていきます。家族はその日、旧都に出かけていて、連絡がつきません。" +
@@ -1161,6 +1301,8 @@
         ...base,
         opts: [
           {
+            id: "fallFarAlone.adults",
+            t: "entrust",
             label: "大人たちのそばにいる",
             sub: "家族の帰りを待つ",
             fx: p => {
@@ -1172,6 +1314,8 @@
       };
     }
     const lines = {
+      id: "fallFarAlone.lines",
+      t: "search",
       label: "避難民の列に家族を探す",
       sub: "毎日、名簿と顔を確かめる",
       fx: p => {
@@ -1187,6 +1331,8 @@
         opts: [
           lines,
           {
+            id: "fallFarAlone.home",
+            t: "wait",
             label: "家で帰りを待つ",
             sub: "灯りをつけたままにしておく",
             fx: p => {
@@ -1202,6 +1348,8 @@
       ...base,
       opts: [
         {
+          id: "fallFarAlone.go",
+          t: "search",
           label: "旧都へ家族を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
@@ -1217,6 +1365,8 @@
         },
         lines,
         {
+          id: "fallFarAlone.home",
+          t: "wait",
           label: "家で帰りを待つ",
           sub: "灯りをつけたままにしておく",
           fx: p => {
@@ -1638,6 +1788,7 @@
     say,
     decisionFor,
     D,
+    KINDS,
     aptLabel,
     autoChoose,
     EVENTS,

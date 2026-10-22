@@ -14,12 +14,16 @@
 **   死亡率 / 状態値の平均の変化 / 選んだあとの仕事・住所 /
 **   記録に残る文（代表例）
 ** 選択肢の処理でエラーが出たら「エラー」と表示し、最後に件数を出す。
+** 決断の key と、選択肢の ID と型（js/sim.js の KINDS）も点検する：
+**   - 決断に key があり、D にその名前の関数がある
+**   - 選択肢に id があり、"key.名前" の形で、同じ決断の中で重ならない
+**   - 型が KINDS にある。同じ id はどの場面でも同じ型
 ** エラーがあれば終了コードは 1。
 */
 require("../js/data.js");
 require("../js/sim.js");
 const E = globalThis.Eridu;
-const {D, DISTRICTS, JOBS} = E;
+const {D, DISTRICTS, JOBS, KINDS} = E;
 
 const args = process.argv.slice(2);
 const ni = args.indexOf("-n");
@@ -224,6 +228,41 @@ function trial(cfg, optIndex, fn){
   };
 }
 
+/* ---- 決断の key と、選択肢の ID・型の点検 ---- */
+
+/* これまでに見た選択肢の ID と、その型 */
+const seenIds = new Map();
+
+/*
+** 決断 dec の key と、選択肢の ID・型を点検し、見つけた問題の文を
+** 配列で返す。見た ID は seenIds に足す。
+*/
+function checkIds(dec){
+  const bad = [];
+  if( !dec.key || typeof D[dec.key] !== "function" ){
+    bad.push(`決断の key がない、または D にない: ${dec.key}`);
+  }
+  const here = new Set();
+  for(const o of dec.opts){
+    const where = `「${o.label}」`;
+    if( !o.id || !o.id.startsWith(dec.key + ".") ){
+      bad.push(`${where}の id が "${dec.key}.名前" の形でない: ${o.id}`);
+    }
+    if( here.has(o.id) ){
+      bad.push(`${where}の id が同じ決断の中で重なる: ${o.id}`);
+    }
+    here.add(o.id);
+    if( !KINDS[o.t] ){
+      bad.push(`${where}の型が KINDS にない: ${o.t}`);
+    }
+    if( seenIds.has(o.id) && seenIds.get(o.id) !== o.t ){
+      bad.push(`${where}の型が場面によって違う: ${o.id}`);
+    }
+    seenIds.set(o.id, o.t);
+  }
+  return bad;
+}
+
 /* ---- 実行と出力 ---- */
 let total = 0,
   totalErr = 0;
@@ -235,11 +274,16 @@ for(const [title, fn, cfg] of SCENES){
   const dec = fn(person(cfg));
   out.push(`\n■ ${title}`);
   out.push(`  ${dec.text}`);
+  for(const b of checkIds(dec)){
+    out.push(`  エラー: ${b}`);
+    totalErr++;
+  }
   dec.opts.forEach((o, i) => {
     const r = trial(cfg, i, fn);
     total++;
     totalErr += r.errors;
-    out.push(`  ${i + 1}. ${o.label}（${o.sub}）`);
+    const kind = KINDS[o.t] ? KINDS[o.t].name : o.t;
+    out.push(`  ${i + 1}. ${o.label}（${o.sub}）  [${o.id} · ${kind}]`);
     if( r.errors ){
       out.push(
         `     エラー ${r.errors}回: ${r.firstError && r.firstError.message}`
@@ -257,7 +301,8 @@ for(const [title, fn, cfg] of SCENES){
   });
 }
 out.push(
-  `\n合計 ${total}個の選択肢を、各${TRIALS}回試しました。エラー ${totalErr}件。`
+  `\n合計 ${total}個の選択肢を、各${TRIALS}回試しました。` +
+    `選択肢の ID は ${seenIds.size}種。エラー ${totalErr}件。`
 );
 console.log(out.join("\n"));
 process.exitCode = totalErr ? 1 : 0;
