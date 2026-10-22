@@ -6,10 +6,63 @@
   const {DISTRICTS, GIVEN, FAMILY, THIREN_KIND, JOBS} = E;
 
   /*
-  ** 乱数。0 以上 1 未満を返す関数。sim.js の中では必ずこれを使う。
-  ** 一括シミュレーションでは setRandom でシード付きのものに差し替える。
+  ** 乱数。sim.js の中では必ず R() を使う（0 以上 1 未満を返す）。
+  ** ふだんは base を引く。一括シミュレーションでは setRandom で base を
+  ** シード付きのものに差し替える。
+  ** 運命を持つ人（p.fate がある人。lab）を動かしている間は、その人の
+  ** 流れ（p.rng）を引く。どの人を動かしているかは use(p) で切り替える。
   */
-  let R = Math.random;
+  let base = Math.random;
+  let cur = null;
+  const R = () => (cur ? cur() : base());
+
+  /*
+  ** 版。動き（確率・効果・決断の中身・乱数を引く順番）を変えたら上げる。
+  ** 運命を持つ人は、同じ版・同じ住民番号・同じ選択なら必ず同じ一生に
+  ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
+  ** 新しいシーズンを始める。
+  */
+  E.VERSION = 1;
+
+  /*
+  ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
+  ** 同じ key からはいつも同じ並びが出る（cyrb53 で種を作り、
+  ** mulberry32 で引く）。
+  */
+  function fateRng(key){
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for(let i = 0; i < key.length; i++){
+      const c = key.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761);
+      h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+      Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    let a = h1 >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  E.fateRng = fateRng;
+
+  /*
+  ** これから p を動かすので、R() が引く流れを p のものにする。
+  ** p に運命がなければ（本編・一括シミュレーション）base に戻す。
+  */
+  function use(p){
+    cur = p && p.rng ? p.rng : null;
+  }
+
+  /*
+  ** 陥落に遭う年齢を、0 以上 1 未満の u から決めて返す（1〜60歳、
+  ** 若いほど出やすい）。lab は同じ1秒の5人で同じ u を使う。
+  */
+  const fallAgeFrom = u => 1 + Math.floor(60 * Math.pow(u, 1.3));
+  E.fallAgeFrom = fallAgeFrom;
 
   /*
   ** ネタバレの切り替え。標準（false）では組織の名前を出さず役割だけにする。
@@ -39,9 +92,12 @@
       ? who().yama + "が、避難してきた人を受け入れています。"
       : "";
 
-  /* 乱数を fn に差し替える。fn は 0 以上 1 未満を返す関数。 */
+  /*
+  ** ふだん引く乱数を fn に差し替える。fn は 0 以上 1 未満を返す関数。
+  ** 運命を持つ人の流れは変わらない。
+  */
   E.setRandom = fn => {
-    R = fn;
+    base = fn;
   };
 
   /*
@@ -62,8 +118,11 @@
     }
   }
 
-  /* 今の乱数を一つ返す。ui.js など sim.js の外から使う。 */
-  const rnd = () => R();
+  /*
+  ** 乱数を一つ返す。ui.js など sim.js の外の演出に使う。運命を持つ人の
+  ** 流れからは引かない（演出で一生が変わらないように）。
+  */
+  const rnd = () => base();
 
   /* v を a 以上 b 以下に収めて返す。状態値は既定の 0〜100。 */
   const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
@@ -158,8 +217,18 @@
   ** 抽選する。isPeer=true の人は記録（log）を残さない（並走する4人と
   ** 一括シミュレーション用）。陥落の前に生まれた人は、陥落に遭う年齢
   ** fallAge（1〜60歳、若いほど出やすい）も決める。
+  **
+  ** fate（文字列）を渡すと、その人は運命を持つ（lab）。生まれは fate だけ
+  ** から決まり（placeId は見ない）、1年ごとの乱数も fate と年齢から決まる
+  ** （step を見る）。同じ fate なら誰が遊んでも同じ赤ちゃんが生まれる。
   */
-  function newPerson(era, isPeer, placeId){
+  function newPerson(era, isPeer, placeId, fate){
+    if( fate ){
+      cur = fateRng(fate + "|birth");
+      placeId = "";
+    }else{
+      cur = null;
+    }
     const d =
       (placeId &&
         DISTRICTS.find(
@@ -194,11 +263,16 @@
       kids: 0,
       flags: {},
       years: [],
-      fallAge: era === "old" ? 1 + Math.floor(60 * Math.pow(R(), 1.3)) : null,
+      fallAge: era === "old" ? fallAgeFrom(R()) : null,
       isPeer,
       no: Math.floor(R() * 9e5) + 1e5,
     };
     p.log = [];
+    if( fate ){
+      p.fate = fate;
+      p.rng = null;
+      cur = null;
+    }
     hook("born", p);
     return p;
   }
@@ -239,6 +313,7 @@
     if( !p.alive ){
       return null;
     }
+    use(p);
     const f = p.flags;
     /*
     ** 旧都陥落：飲まれる範囲の中にいれば避難の決断、外にいれば避難民を
@@ -1444,10 +1519,27 @@
 
   /*
   ** 決断 dec の選択肢を一つランダムに選んで p に当て、選んだ選択肢を返す
-  ** （同じ1秒に生まれた人たち・一括シミュレーション用）。
+  ** （同じ1秒に生まれた人たち・一括シミュレーション用）。p.route（選択肢の
+  ** ID の配列。lab で、前に誰かが歩いた道）があれば、p.routeAt 番目の
+  ** ID の選択肢を選んで routeAt を進める。その選択肢がなければ道を捨てて
+  ** （p.offRoute に印）ランダムに選ぶ。
   */
   function autoChoose(p, dec){
-    const o = pick(dec.opts);
+    use(p);
+    let o = null;
+    if( p.route ){
+      o = dec.opts.find(x => x.id === p.route[p.routeAt]) || null;
+      if( o ){
+        p.routeAt++;
+      }else{
+        /* 道から外れた（版が違うなど）。この先はランダムに選ぶ */
+        p.route = null;
+        p.offRoute = true;
+      }
+    }
+    if( !o ){
+      o = pick(dec.opts);
+    }
     apply(p, dec, o);
     return o;
   }
@@ -1457,6 +1549,7 @@
   ** 選択肢を当てるときは、画面からもランダムでも必ずこれを通す。
   */
   function apply(p, dec, o){
+    use(p);
     o.fx(p);
     hook("pick", p, dec, o);
   }
@@ -1649,6 +1742,11 @@
     if( !p.alive ){
       return;
     }
+    /* 運命を持つ人は、この年の乱数を fate と年齢から決め直す */
+    if( p.fate ){
+      p.rng = fateRng(p.fate + "|" + (p.age + 1));
+    }
+    use(p);
     p.age++;
     const j = JOBS[p.job];
     /* 教育の流れ */
