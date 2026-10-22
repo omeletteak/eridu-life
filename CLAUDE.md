@@ -22,6 +22,14 @@
   各選択肢を何千回か試して死亡率・状態値の変化・その後の仕事と住所・記録の文を出す。`node tools/choices.js [見出しの一部] [-n 回数]`。
   決断や選択肢を足したら、ここの SCENES にも場面を足す。決断の key と選択肢の ID・型の点検もする
 - `tools/style.js`: 書き方の点検（下の「コーディングスタイル」のうち機械で確かめられるもの）。`node tools/style.js [ファイル…]`
+- `lab/`: 試験版。本編と同じ js/ を読み、人の記録を SQLite（sql.js の in-memory データベース）にも置く。
+  スマホで試すため、GitHub Pages の https://omeletteak.github.io/eridu-life/lab/ で開く（file:// では wasm を読めない）
+  - `lab/index.html`: `eridu-life.html` の写し（パスを `../` に、lab の script と注記を足したもの）。本編のマークアップを変えたらこちらも合わせる
+  - `lab/db.js`: 表を作り、`Eridu.hooks` で受け取った生まれ・記録の文・選択・1年の終わりを書く。表の設計は `docs/schema.md`
+  - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
+  - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
+- `Eridu.hooks`（js/sim.js）: 記録の差し込み口（born / said / pick / year）。既定は空で、本編の動きは変えない。
+  選択肢を当てるときは画面からもランダムでも `apply(p, dec, o)` を通す（`o.fx` を直接呼ばない。tools/choices.js は例外）
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。`index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
 - 開発用：`eridu-life.html?fall` で開くと旧都陥落の前に生まれ、1歳で陥落が来る（演出の確認用）。
   `?fall=near` で範囲の中、`?fall=far` で範囲の外に生まれる。`&age=45` を付けるとその年齢で陥落が来る（それまでは一気に進める）

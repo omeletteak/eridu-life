@@ -1,7 +1,7 @@
 # 表の設計（案）
 
 人の状態をキーと値の袋（`p.flags` など）で持つのをやめ、
-欄の決まった表の行として持つための設計案。まだコードは変えていない。
+欄の決まった表の行として持つための設計案。まず `lab/` で試している。
 
 ## ねらい
 - どんな欄があるかを、コードを読まなくてもこの表の一覧で分かるようにする
@@ -29,9 +29,10 @@ people ──┬── picks   （決断1回で1行）
 | 欄 | 型 | 中身 | 今のどこ |
 |---|---|---|---|
 | id | 整数 | 人の番号（表の中で一意） | 新設 |
+| game | 整数 | どの一生か → games.id（「生まれる」を押すたびに1つ） | 新設 |
+| role | 文字 | `me`（本人）/ `peer`（同じ1秒に生まれた4人） | `p.isPeer` |
 | no | 整数 | 住民番号（表示用） | `p.no` |
 | era | 文字 | `now` / `old` | `p.era` |
-| is_peer | 真偽 | 同じ1秒に生まれた4人か | `p.isPeer` |
 | name | 文字 | 名前 | `p.name` |
 | sex | 文字 | 性別 | `p.sex` |
 | thiren | 真偽 | シリオンか | `p.thiren` |
@@ -118,18 +119,28 @@ people ──┬── picks   （決断1回で1行）
 - `flags.forceAlone`：開発用（`&alone=1`）。ui.js から sim.js に渡す引数にする
 - `fallChoice`：陥落で選んだラベル。picks の行から options を引けば出る
 
-## 置き場所の案
-```js
-Eridu.db = {
-  people: [],      /* 行の配列。各行は上の欄だけを持つ */
-  picks: [],
-  happenings: [],
-  log: [],
-};
-```
-決断の `fx(p)` や出来事の `fx(p)` は、`p` に people の行を渡して
-`p.hp -= 10` のように書き換える今の形のまま使える。
-前世の記録は people の行（と log）をそのまま localStorage に保存する。
+## 置き場所
+表は SQLite の in-memory データベースに置く。
+
+- ブラウザ（`lab/`）：sql.js（`lab/vendor/`）。スマホで試すため GitHub Pages で開く
+- Node（`tools/`）：同じ表を `node:sqlite` か sql.js で作る（まだ）
+
+計算の途中まで SQL にはしない。決断や出来事の `fx(p)` は
+`p.hp -= 10` のように人のオブジェクトを書き換える今の形のまま使い、
+`Eridu.hooks` で次のときに表へ書く。
+
+| とき | 書くもの |
+|---|---|
+| 初めて記録・選択・1年の終わりが来た | people に1行（本人なら games にも1行） |
+| say | log に1行 |
+| apply（選択肢を当てた） | options（初めての選択肢なら）と picks に1行、people を書き戻す |
+| step の終わり | people を書き戻す |
+
+### いま lab/ でできていること
+- 表：games / people / picks / log / districts / jobs / kinds / options
+- people の `family_lost` などは、まだ `p.flags` から写している
+  （flags をやめるのは下の進め方の 2〜3）
+- happenings はまだない（EVENTS に ID がないため）
 
 ## 進め方の案（このブランチで試す）
 1. options / kinds / events の決まった表を作る（動きは変わらない）
