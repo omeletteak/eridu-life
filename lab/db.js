@@ -6,8 +6,9 @@
 ** 生まれと運命（1年ごとの乱数）が決まり（sim.js の fate）、プレイヤーは
 ** その中の一本の道（選んだ選択肢の ID の並び）を歩くだけ。ここに残すのは、
 ** 誰が・いつ・どの番号を・どの道で歩いたか（games と people）と、
-** その一生の記録（picks・log）。同じ1秒の4人は番号から作り直せるので
-** 残さない（lab/fate.js）。
+** その一生の記録（picks・log）。道は最後の選択まで決まらないので、
+** 表に書くのは亡くなったとき（遊びかけの一生は残らない）。同じ1秒の
+** 4人は番号から作り直せるので残さない（lab/fate.js）。
 **
 ** データベースは in-memory で動かし、書き込みのあと少し待って
 ** localStorage に丸ごと保存する（次に開いたときに読み戻す）。
@@ -93,8 +94,8 @@ CREATE TABLE log(
   const b = v => (v ? 1 : 0);
 
   /*
-  ** people の欄のうち、人 p から毎年書き戻すものと、その値を取り出す
-  ** 関数の組。fall_survived は陥落の選択を当てた直後にだけ書く。
+  ** people の欄のうち、亡くなった人 p から書くものと、その値を取り出す
+  ** 関数の組。path と fall_survived は歩きかけの記録から書く。
   */
   const COLS = [
     ["name", p => p.name],
@@ -128,16 +129,15 @@ CREATE TABLE log(
   const INSERT_PERSON =
     "INSERT INTO people(game, season, era, no, path, " + NAMES.join(", ") +
     ") VALUES(?, ?, ?, ?, '', " + NAMES.map(() => "?").join(", ") + ")";
-  const UPDATE_PERSON =
-    "UPDATE people SET " + NAMES.map(n => n + " = ?").join(", ") +
-    " WHERE id = ?";
 
   /*
-  ** 歩いている本人のオブジェクトから people.id を引く表。表に入るのは
-  ** E.walk で歩きはじめた本人だけ（同じ1秒の4人や、開発用に作った人は
-  ** 入らない）。sim.js の人には欄を足さない
+  ** 歩いている本人のオブジェクトから、歩きかけの記録を引く表。
+  ** 記録は {season, era, no, bornAt, picks, log, fallSurvived} で、
+  ** 亡くなったときに表へ書く（commit）。それまでは誰の世界にも出ない
+  ** （道は最後の選択まで決まらないので）。同じ1秒の4人や開発用に
+  ** 作った人は入らない。sim.js の人には欄を足さない
   */
-  const ids = new WeakMap();
+  const walks = new WeakMap();
   /* 用意ができた Database。できるまでは null */
   let db = null;
   /* この端末のプレイヤーの id */
@@ -196,64 +196,89 @@ CREATE TABLE log(
 
   /*
   ** 本人 p が、シーズン season・時代 era・住民番号 no を歩きはじめた。
-  ** games と people に1行ずつ足し、この先の記録を p に結び付ける。
+  ** 表にはまだ書かず、歩きかけの記録を作る。
   */
   E.walk = (p, season, era, no) => {
-    run("INSERT INTO games(season, player, version, era, no, born_at) " +
-      "VALUES(?, ?, ?, ?, ?, ?)", [
-      season, player, E.VERSION, era, no, new Date().toISOString(),
-    ]);
-    const game = one("SELECT last_insert_rowid()");
-    run(INSERT_PERSON, [game, season, era, no, ...values(p)]);
-    ids.set(p, one("SELECT last_insert_rowid()"));
-  };
-
-  /* 記録の文を log に足す（歩いている本人のだけ）。 */
-  E.hooks.said = (p, text, cls) => {
-    const id = ids.get(p);
-    if( !id ){
-      return;
-    }
-    run("INSERT INTO log(person, age, text, cls) VALUES(?, ?, ?, ?)", [
-      id, p.age, text, cls,
-    ]);
+    walks.set(p, {
+      season, era, no,
+      bornAt: new Date().toISOString(),
+      picks: [],
+      log: [],
+      fallSurvived: null,
+    });
   };
 
   /*
-  ** 歩いている本人が選んだ選択肢を picks に足し、道（people.path、
-  ** 選択肢の ID をカンマでつないだもの）を延ばし、人の欄を書き戻す。
-  ** 選択肢は初めて出たときに options に足す。陥落の選択なら、その時点で
-  ** 生きているかを fall_survived に書く。
+  ** 亡くなった本人 p の歩きかけの記録を表に書く（games・people・
+  ** options・picks・log）。同じ番号を前に誰かがまったく同じ道で歩いて
+  ** いなければ、p.mark を true にする（その道に名前が付いた印）。
   */
-  E.hooks.pick = (p, dec, o) => {
-    const id = ids.get(p);
-    if( !id ){
-      return;
-    }
-    run("INSERT OR IGNORE INTO options VALUES(?, ?, ?, ?)", [
-      o.id, dec.key, o.t, o.label,
-    ]);
-    run("INSERT INTO picks(person, age, key, opt) VALUES(?, ?, ?, ?)", [
-      id, p.age, dec.key, o.id,
-    ]);
-    run(
-      "UPDATE people SET path = CASE path WHEN '' THEN ? " +
-        "ELSE path || ',' || ? END WHERE id = ?",
-      [o.id, o.id, id]
+  function commit(p){
+    const w = walks.get(p);
+    walks.delete(p);
+    const path = w.picks.map(x => x.o.id).join(",");
+    const seen = one(
+      "SELECT count(*) FROM people WHERE season = ? AND era = ? " +
+        "AND no = ? AND path = ?",
+      [w.season, w.era, w.no, path]
     );
-    run(UPDATE_PERSON, [...values(p), id]);
-    if( dec.alarm ){
-      run("UPDATE people SET fall_survived = ? WHERE id = ?", [
-        b(p.alive), id,
+    p.mark = !seen;
+    run("INSERT INTO games(season, player, version, era, no, born_at) " +
+      "VALUES(?, ?, ?, ?, ?, ?)", [
+      w.season, player, E.VERSION, w.era, w.no, w.bornAt,
+    ]);
+    const game = one("SELECT last_insert_rowid()");
+    run(INSERT_PERSON, [game, w.season, w.era, w.no, ...values(p)]);
+    const id = one("SELECT last_insert_rowid()");
+    run("UPDATE people SET path = ?, fall_survived = ? WHERE id = ?", [
+      path, w.fallSurvived, id,
+    ]);
+    for(const x of w.picks){
+      run("INSERT OR IGNORE INTO options VALUES(?, ?, ?, ?)", [
+        x.o.id, x.key, x.o.t, x.o.label,
       ]);
+      run("INSERT INTO picks(person, age, key, opt) VALUES(?, ?, ?, ?)", [
+        id, x.age, x.key, x.o.id,
+      ]);
+    }
+    for(const x of w.log){
+      run("INSERT INTO log(person, age, text, cls) VALUES(?, ?, ?, ?)", [
+        id, x.age, x.text, x.cls,
+      ]);
+    }
+    save();
+  }
+
+  /* 記録の文を、歩いている本人の記録に足す。 */
+  E.hooks.said = (p, text, cls) => {
+    const w = walks.get(p);
+    if( w ){
+      w.log.push({age: p.age, text, cls});
     }
   };
 
-  /* 1年を終えた本人の欄を書き戻す。 */
+  /*
+  ** 歩いている本人が選んだ選択肢を記録に足す。陥落の選択なら、その時点で
+  ** 生きているかを残す。選んだ結果亡くなったら表に書く。
+  */
+  E.hooks.pick = (p, dec, o) => {
+    const w = walks.get(p);
+    if( !w ){
+      return;
+    }
+    w.picks.push({age: p.age, key: dec.key, o});
+    if( dec.alarm ){
+      w.fallSurvived = b(p.alive);
+    }
+    if( !p.alive ){
+      commit(p);
+    }
+  };
+
+  /* 1年を終えた本人が亡くなっていたら表に書く。 */
   E.hooks.year = p => {
-    const id = ids.get(p);
-    if( id ){
-      run(UPDATE_PERSON, [...values(p), id]);
+    if( walks.get(p) && !p.alive ){
+      commit(p);
     }
   };
 

@@ -164,10 +164,13 @@ ID をカンマでつないだもの）と、その一生の最期の状態を�
 
 | とき | 書くもの |
 |---|---|
-| 本人が生まれた（meSource） | games と people に1行 |
-| say（本人） | log に1行 |
-| apply（本人が選んだ） | options（初めての選択肢なら）と picks に1行、path を延ばし、people を書き戻す |
-| step の終わり（本人） | people を書き戻す |
+| 本人が生まれた（meSource） | まだ書かない（歩きかけの記録を作る） |
+| say / apply（本人） | 歩きかけの記録に足す |
+| 本人が亡くなった（step の終わりか apply のあと） | games・people・options・picks・log をまとめて書く |
+
+道は最後の選択まで決まらないので、表に書くのは亡くなったときだけ。遊びかけの
+一生は残らない。書く前に、同じ番号をまったく同じ道で歩いた人がいるかを調べ、
+いなければ最期の画面と前世の記録の住民番号の横に ✦ を出す（説明はしない）。
 
 ### いま lab/ でできていること
 - 表：players / seasons / games / people / picks / log / districts / jobs / kinds / options
