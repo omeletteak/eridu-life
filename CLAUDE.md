@@ -38,7 +38,7 @@
     開発用：`lab/?ids=N` で1シーズンを N 人に、`&reborn=1` で必ず歩かれた番号に生まれる
   - `lab/console.js` / `lab/lab.css`: 画面の下に SQL を打てる欄と結果の表を出す。データベースをファイルに保存できる
   - `lab/vendor/`: sql.js 1.12.0（`sql-wasm.js` と `sql-wasm.wasm`、MIT）。「ライブラリなし」の例外で、lab だけが使う。手を入れない
-- 住民番号は亡くなるまで住民票に出さない（伏せ字）。最期の画面と前世の記録で出す（本編も lab も）
+- 住民番号は、亡くなるまで存在ごと出さない（住民票の見出しは「住民記録」だけ）。亡くなると住民票・最期の画面・前世の記録に出す（本編も lab も）
 - `Eridu.meSource(era, place)` / `Eridu.peerSource(me)`（ui.js が見る）: あれば、本人と同じ1秒の人を先にそこからもらう
   （開発用の `?fall` では使わない）。`q.tag` は名前の後ろに出す印。本編ではどれも置かない
 - 運命（js/sim.js）: `newPerson(era, isPeer, placeId, fate)` に fate を渡すと、生まれは fate から、1年ごとの乱数は fate と年齢から

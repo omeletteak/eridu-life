@@ -83,11 +83,14 @@
         `転出<small>旧都 → ${dest}</small></div>`
       : "";
     const deathStamp = p.alive ? "" : `<div class="stamp">${p.age}歳 没</div>`;
-    /* 住民番号は亡くなるまで伏せる（同じ番号に生まれ直しても気付かないように） */
-    const no = p.alive ? "······" : p.no;
+    /*
+    ** 住民番号は、亡くなるまで存在ごと出さない（同じ番号に生まれ直しても
+    ** 気付かないように）
+    */
+    const head = p.alive ? "住民記録" : "住民記録 No." + p.no;
     $("idcard").classList.toggle("slammed", !!slam);
     $("idcard").innerHTML = `
-   <div><div class="eyebrow">住民記録 No.${no}</div><div class="name">${p.name}</div></div>
+   <div><div class="eyebrow">${head}</div><div class="name">${p.name}</div></div>
    <div class="age">${p.age}<small>歳</small></div>
    <dl>
     <dt>出生</dt><dd>${p.birthD.name} <span class="muted">· ${p.birthD.desc}</span></dd>
