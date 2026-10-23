@@ -74,18 +74,8 @@
     const moved = p.d.id !== p.birthD.id;
     const from = p.flags.survivor ? `<s class="muted">旧都</s> → ` : "";
     const addr = moved ? `<dt>住所</dt><dd>${from}${p.d.name}</dd>` : "";
-    /*
-    ** 陥落が起きるまでは、誰もまだ「旧都」と呼ばないので「エリー都」と書く。
-    ** 陥落を生き延びたか、見届けたか、陥落で亡くなったか、陥落の年齢を
-    ** 過ぎたら「旧都」
-    */
-    const fell =
-      p.flags.survivor ||
-      p.flags.witness ||
-      p.cause === "旧都陥落" ||
-      (p.fallAge !== null && p.age > p.fallAge);
-    const oldName = fell ? "旧都" : "エリー都";
-    const era = p.era === "old" ? oldName + "陥落の前" : "いまの新エリー都";
+    /* 時代の名前。「旧都陥落」は出来事の名前なので、陥落の前でもそう書く */
+    const era = p.era === "old" ? "旧都陥落の前" : "いまの新エリー都";
     const job = JOBS[p.job].name + (p.proxy ? " ＋ 裏稼業" : "");
     const family =
       (p.married ? "配偶者あり" : "ひとり") +

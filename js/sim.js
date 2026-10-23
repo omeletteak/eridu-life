@@ -914,7 +914,7 @@
         return D.fallAlone(p);
       }
       const base = {
-        title: "エリー都陥落",
+        title: "旧都陥落",
         key: "fall",
         alarm: "near",
         text:
@@ -1092,7 +1092,7 @@
       return D.fallFarAlone(p);
     }
     const base = {
-      title: "エリー都陥落",
+      title: "旧都陥落",
       key: "fallFar",
       alarm: "far",
       text:
@@ -1260,7 +1260,7 @@
   */
   D.fallAlone = p => {
     const base = {
-      title: "エリー都陥落",
+      title: "旧都陥落",
       key: "fallAlone",
       alarm: "near",
       text:
@@ -1389,7 +1389,7 @@
   */
   D.fallFarAlone = p => {
     const base = {
-      title: "エリー都陥落",
+      title: "旧都陥落",
       key: "fallFarAlone",
       alarm: "far",
       text:
