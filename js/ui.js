@@ -48,7 +48,8 @@
   ** 開発用：?fall で旧都陥落の前に生まれ、1歳で陥落が来る。
   ** ?fall=near / ?fall=far で範囲の中か外かを選べる。
   ** &age=45 のように付けると、その年齢で陥落が来る（それまでの年は一気に
-  ** 進める）。&alone=1 で家族がすでに消息不明の状況になる。
+  ** 進める）。&alone=1 で家族がすでに消息不明の状況になる。&orphan=1 で
+  ** 孤児として生まれる（施設で暮らす）。
   */
   const QS = new URLSearchParams(location.search);
   const DEBUG_FALL = QS.get("fall"),
@@ -77,8 +78,10 @@
     /* 時代の名前。「旧都陥落」は出来事の名前なので、陥落の前でもそう書く */
     const era = p.era === "old" ? "旧都陥落の前" : "いまの新エリー都";
     const job = JOBS[p.job].name + (p.proxy ? " ＋ 裏稼業" : "");
+    const alone =
+      p.flags.orphan && p.age < 18 ? "身寄りなし（施設で暮らす）" : "ひとり";
     const family =
-      (p.married ? "配偶者あり" : "ひとり") +
+      (p.married ? "配偶者あり" : alone) +
       (p.kids ? "・子ども" + p.kids + "人" : "") +
       (p.flags.bangboo ? "・ボンプ" : "");
     const dest = p.d.id === "outer" ? "郊外" : "新エリー都";
@@ -837,6 +840,9 @@
         if( QS.has("alone") ){
           me.flags.forceAlone = 1;
         }
+        if( QS.has("orphan") ){
+          me.flags.orphan = 1;
+        }
         while( me.alive && me.age < DEBUG_AGE - 1 ){
           step(me);
           const d = decisionFor(me);
@@ -897,7 +903,13 @@
     const u = me.fate
       ? window.Eridu.fateRng(me.fate + "|parents")()
       : Math.random();
-    if( me.birthD.id === "camp" || (me.era !== "old" && u < 0.2) ){
+    if( me.flags.orphan ){
+      born.push({
+        age: 0,
+        text: "生まれてすぐ、施設に預けられた。親のことは何も知らない。",
+        cls: "",
+      });
+    }else if( me.birthD.id === "camp" || (me.era !== "old" && u < 0.2) ){
       born.push({
         age: 0,
         text: "両親は旧都から逃れてきた人たちだった。",
