@@ -17,4 +17,4 @@
 ## 開発
 - `node tools/simulate.js` … 一括シミュレーション（寿命・死因などの集計）
 - `node tools/choices.js` … 選択肢の総点検
-- 詳しい構成は `CLAUDE.md` を参照
+- 詳しい構成は `docs/overview.md`、書き方と変更の作法は `CLAUDE.md` を参照。やることは issue に置いています

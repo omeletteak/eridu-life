@@ -1,15 +1,74 @@
 /*
 ** シミュレーション：人の生成・決断・出来事・1年の進行。
 ** DOM には触らないので Node でも動く。data.js を先に読み込むこと。
+** 構成と決まりは docs/sim.md。変えるときに守ること：
+**   - 乱数は R() だけ。公開の入口では先に use(p)（運命の流れを切り替える）
+**   - 選択肢を当てるときは apply(p, dec, o) を通す
+**   - 選択肢の id と型は追記だけ。決断や選択肢を足したら tools/choices.js の
+**     SCENES にも場面を足す
+**   - 動きを変えたら E.VERSION を上げ、node tools/fate.js --golden
 */
 (function(E){
   const {DISTRICTS, GIVEN, FAMILY, THIREN_KIND, JOBS} = E;
 
   /*
-  ** 乱数。0 以上 1 未満を返す関数。sim.js の中では必ずこれを使う。
-  ** 一括シミュレーションでは setRandom でシード付きのものに差し替える。
+  ** 乱数。sim.js の中では必ず R() を使う（0 以上 1 未満を返す）。
+  ** ふだんは base を引く。一括シミュレーションでは setRandom で base を
+  ** シード付きのものに差し替える。
+  ** 運命を持つ人（p.fate がある人。lab）を動かしている間は、その人の
+  ** 流れ（p.rng）を引く。どの人を動かしているかは use(p) で切り替える。
   */
-  let R = Math.random;
+  let base = Math.random;
+  let cur = null;
+  const R = () => (cur ? cur() : base());
+
+  /*
+  ** 版。動き（確率・効果・決断の中身・乱数を引く順番）を変えたら上げる。
+  ** 運命を持つ人は、同じ版・同じ住民番号・同じ選択なら必ず同じ一生に
+  ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
+  ** 新しいシーズンを始める。
+  */
+  E.VERSION = 1;
+
+  /*
+  ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
+  ** 同じ key からはいつも同じ並びが出る（cyrb53 で種を作り、
+  ** mulberry32 で引く）。
+  */
+  function fateRng(key){
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for(let i = 0; i < key.length; i++){
+      const c = key.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761);
+      h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+      Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    let a = h1 >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  E.fateRng = fateRng;
+
+  /*
+  ** これから p を動かすので、R() が引く流れを p のものにする。
+  ** p に運命がなければ（本編・一括シミュレーション）base に戻す。
+  */
+  function use(p){
+    cur = p && p.rng ? p.rng : null;
+  }
+
+  /*
+  ** 陥落に遭う年齢を、0 以上 1 未満の u から決めて返す（1〜60歳、
+  ** 若いほど出やすい）。lab は同じ1秒の5人で同じ u を使う。
+  */
+  const fallAgeFrom = u => 1 + Math.floor(60 * Math.pow(u, 1.3));
+  E.fallAgeFrom = fallAgeFrom;
 
   /*
   ** ネタバレの切り替え。標準（false）では組織の名前を出さず役割だけにする。
@@ -39,13 +98,37 @@
       ? who().yama + "が、避難してきた人を受け入れています。"
       : "";
 
-  /* 乱数を fn に差し替える。fn は 0 以上 1 未満を返す関数。 */
+  /*
+  ** ふだん引く乱数を fn に差し替える。fn は 0 以上 1 未満を返す関数。
+  ** 運命を持つ人の流れは変わらない。
+  */
   E.setRandom = fn => {
-    R = fn;
+    base = fn;
   };
 
-  /* 今の乱数を一つ返す。ui.js など sim.js の外から使う。 */
-  const rnd = () => R();
+  /*
+  ** 記録の差し込み口。lab/ の SQLite 版などが関数を入れる。既定は空で、
+  ** 何も入っていなければ何もしない（動きも乱数を引く順番も変えない）。
+  **
+  **   born(p)            newPerson が p を作った直後
+  **   said(p, text, cls) say が呼ばれたとき（同じ1秒の4人の分も）
+  **   pick(p, dec, o)    決断 dec の選択肢 o を当てた直後（apply から）
+  **   year(p)            step が p の1年を終えたとき
+  */
+  E.hooks = {};
+
+  /* E.hooks の name があれば、残りの引数で呼ぶ。 */
+  function hook(name, ...args){
+    if( E.hooks[name] ){
+      E.hooks[name](...args);
+    }
+  }
+
+  /*
+  ** 乱数を一つ返す。ui.js など sim.js の外の演出に使う。運命を持つ人の
+  ** 流れからは引かない（演出で一生が変わらないように）。
+  */
+  const rnd = () => base();
 
   /* v を a 以上 b 以下に収めて返す。状態値は既定の 0〜100。 */
   const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
@@ -140,8 +223,18 @@
   ** 抽選する。isPeer=true の人は記録（log）を残さない（並走する4人と
   ** 一括シミュレーション用）。陥落の前に生まれた人は、陥落に遭う年齢
   ** fallAge（1〜60歳、若いほど出やすい）も決める。
+  **
+  ** fate（文字列）を渡すと、その人は運命を持つ（lab）。生まれは fate だけ
+  ** から決まり（placeId は見ない）、1年ごとの乱数も fate と年齢から決まる
+  ** （step を見る）。同じ fate なら誰が遊んでも同じ赤ちゃんが生まれる。
   */
-  function newPerson(era, isPeer, placeId){
+  function newPerson(era, isPeer, placeId, fate){
+    if( fate ){
+      cur = fateRng(fate + "|birth");
+      placeId = "";
+    }else{
+      cur = null;
+    }
     const d =
       (placeId &&
         DISTRICTS.find(
@@ -176,19 +269,27 @@
       kids: 0,
       flags: {},
       years: [],
-      fallAge: era === "old" ? 1 + Math.floor(60 * Math.pow(R(), 1.3)) : null,
+      fallAge: era === "old" ? fallAgeFrom(R()) : null,
       isPeer,
       no: Math.floor(R() * 9e5) + 1e5,
     };
     p.log = [];
+    if( fate ){
+      p.fate = fate;
+      p.rng = null;
+      cur = null;
+    }
+    hook("born", p);
     return p;
   }
 
   /*
   ** p の人生の記録に、今の年齢で text を足す。cls は表示の種類
-  ** （good / bad / eth / big を空白区切りで）。isPeer の人には何もしない。
+  ** （good / bad / eth / big を空白区切りで）。isPeer の人は記録に足さない
+  ** （hooks.said には渡す）。
   */
   function say(p, text, cls = ""){
+    hook("said", p, text, cls);
     if( p.isPeer ){
       return;
     }
@@ -201,10 +302,14 @@
   ** この年に p が迎える決断を返す。なければ null。
   ** 決断は D のどれかが作るオブジェクトで、
   **
-  **   title  見出し
+  **   title  見出し（年齢などが入るので、見分けには key を使う）
+  **   key    決断の種類（"school" や "fall" など。D の名前と同じ）
   **   text   状況の説明
-  **   opts   選択肢の配列。各要素は label（選択肢）/ sub（補足）/
-  **          fx（選んだときに p を変える関数）
+  **   opts   選択肢の配列。各要素は
+  **            id     選択肢の ID（"key.名前"）。ラベルが状況で変わっても同じ
+  **            t      選択肢の型（KINDS のキー）。時代をまたいで比べるのに使う
+  **            label  選択肢 / sub 補足
+  **            fx     選んだときに p を変える関数
   **   alarm  旧都陥落のときだけ。範囲の中は "near"、外は "far"
   **
   ** 同じ決断は一生に一度だけ出す（p.flags に印をつける）。優先順は
@@ -214,6 +319,7 @@
     if( !p.alive ){
       return null;
     }
+    use(p);
     const f = p.flags;
     /*
     ** 旧都陥落：飲まれる範囲の中にいれば避難の決断、外にいれば避難民を
@@ -270,6 +376,34 @@
   }
 
   /*
+  ** 選択肢の型。違う決断や違う時代の選択を比べるための分け方。
+  ** name は文を作るときの呼び名、group は比べるときにまとめる単位
+  ** （「助ける」と「探す」は、危険を取って人のもとへ行く点で同じ組）。
+  **
+  ** 型と選択肢の ID は、共有した記録との互換のため追記だけにする
+  ** （名前を変えたり消したりしない）。
+  */
+  const KINDS = {
+    /* 危機のとき */
+    flee: {name: "逃げる", group: "flee"},
+    help: {name: "助ける", group: "reach"},
+    search: {name: "探す", group: "reach"},
+    guard: {name: "守る", group: "guard"},
+    share: {name: "分ける", group: "share"},
+    wait: {name: "待つ", group: "wait"},
+    shut: {name: "閉ざす", group: "shut"},
+    entrust: {name: "委ねる", group: "entrust"}, /* 一択。比べない */
+    /* 人生の節目 */
+    stable: {name: "安定", group: "stable"},
+    venture: {name: "挑む", group: "venture"},
+    stray: {name: "外れる", group: "stray"},
+    together: {name: "共に", group: "together"},
+    alone: {name: "ひとり", group: "alone"},
+    change: {name: "変える", group: "change"},
+    keep: {name: "続ける", group: "keep"},
+  };
+
+  /*
   ** 決断を作る関数の表。どれも p を受け取り、その人の状況に合わせた決断
   ** （decisionFor の説明を参照）を返す。
   */
@@ -277,6 +411,7 @@
     /* 15歳の進路。教育の水準（p.d.edu）で受験勉強の伸びが変わる。 */
     school: p => ({
       title: p.age + "歳 · 進路",
+      key: "school",
       text:
         "中学を終える年です。" +
         p.d.name +
@@ -285,6 +420,8 @@
           : "から通える進学先は多くありません。"),
       opts: [
         {
+          id: "school.study",
+          t: "stable",
           label: "進学校を目指して勉強する",
           sub:
             p.d.edu >= 0.5
@@ -304,6 +441,8 @@
           },
         },
         {
+          id: "school.parttime",
+          t: "together",
           label: "学校に通いながらバイトで稼ぐ",
           sub: "お金と人間関係",
           fx: p => {
@@ -315,6 +454,8 @@
           },
         },
         {
+          id: "school.wild",
+          t: "stray",
           label: "走り屋の仲間とつるむ",
           sub: "人間関係と幸福。危うい道",
           fx: p => {
@@ -340,6 +481,7 @@
       );
       return {
         title: p.age + "歳 · 仕事",
+        key: "work",
         text:
           "社会に出る年です。" +
           (p.thiren ? "シリオンへの採用の壁は、まだ残っています。" : "") +
@@ -348,6 +490,8 @@
           "」でした。",
         opts: [
           {
+            id: "work.corp",
+            t: "venture",
             label: "大手のホロウ調査企業を受ける",
             sub: "合格の見込み 約" + Math.round(corpChance) + "%",
             fx: p => {
@@ -362,6 +506,8 @@
             },
           },
           {
+            id: "work.build",
+            t: "stable",
             label: "建設・解体の現場で働く",
             sub: "そこそこの収入。少しずつ侵蝕",
             fx: p => {
@@ -375,6 +521,8 @@
             },
           },
           {
+            id: "work.police",
+            t: "help",
             label: "治安局に志願する",
             sub: p.hp >= 55 ? "体力は足りている" : "体力に不安",
             fx: p => {
@@ -388,6 +536,8 @@
             },
           },
           {
+            id: "work.raider",
+            t: "venture",
             label: "無許可でホロウに潜る",
             sub: "高収入。侵蝕と死の危険",
             fx: p => {
@@ -398,6 +548,8 @@
           ...(p.flags.wild
             ? [
                 {
+                  id: "work.gang",
+                  t: "stray",
                   label: "ギャングの仲間と生きる",
                   sub: "居場所はある。危険も多い",
                   fx: p => {
@@ -417,14 +569,19 @@
     /* 24歳の裏稼業（ホロウ内の道案内）の誘い。 */
     proxy: p => ({
       title: p.age + "歳 · 誘い",
+      key: "proxy",
       text: "顔見知りから、ホロウ内の道案内をする裏稼業の手伝いを頼まれました。報酬は悪くありません。",
       opts: [
         {
+          id: "proxy.decline",
+          t: "stable",
           label: "断る",
           sub: "何も変わらない",
           fx: p => say(p, "誘いを断った。"),
         },
         {
+          id: "proxy.accept",
+          t: "venture",
           label: "引き受ける",
           sub: "副収入。侵蝕と治安局の目",
           fx: p => {
@@ -450,9 +607,12 @@
       const bonus = grieving ? -5 : 20;
       return {
         title: p.age + "歳 · 家族",
+        key: "family",
         text,
         opts: [
           {
+            id: "family.together",
+            t: "together",
             label: "一緒に暮らす",
             sub: grieving
               ? "今は難しいかもしれない"
@@ -474,6 +634,8 @@
             },
           },
           {
+            id: "family.alone",
+            t: "alone",
             label: "ひとりで、ボンプと暮らす",
             sub: "気楽。老後は少し寂しい",
             fx: p => {
@@ -495,6 +657,7 @@
       const to = DISTRICTS.find(x => x.id === (preFall ? "kcenter" : "center"));
       return {
         title: p.age + "歳 · 転機",
+        key: "turn",
         text:
           "仕事は「" +
           JOBS[p.job].name +
@@ -503,6 +666,8 @@
           "です。",
         opts: [
           {
+            id: "turn.shop",
+            t: "venture",
             label: p.flags.lostShop
               ? "もう一度、自分の店を開く"
               : "自分の店を開く",
@@ -522,6 +687,8 @@
             },
           },
           {
+            id: "turn.keep",
+            t: "keep",
             label: "今の仕事を続ける",
             sub: "変化なし",
             fx: p => say(p, "同じ毎日を続けることにした。"),
@@ -529,6 +696,8 @@
           ...(p.d.id !== to.id
             ? [
                 {
+                  id: "turn.move",
+                  t: "change",
                   label: to.name + "へ引っ越す",
                   sub: "安全になる。家賃が重い",
                   fx: p => {
@@ -546,9 +715,12 @@
     /* 62歳の老後。引退するか働き続けるか。 */
     retire: p => ({
       title: p.age + "歳 · 老後",
+      key: "retire",
       text: "体の衰えを感じはじめています。",
       opts: [
         {
+          id: "retire.retire",
+          t: "stable",
           label: "引退する",
           sub: "穏やかに暮らす",
           fx: p => {
@@ -558,6 +730,8 @@
           },
         },
         {
+          id: "retire.work",
+          t: "keep",
           label: "働き続ける",
           sub: "お金は入る。体には負担",
           fx: p => {
@@ -584,11 +758,14 @@
       );
       return {
         title: "侵蝕の症状",
+        key: "ether",
         text:
           (p.d.med >= 0.5 ? "" : p.d.name + "の診療所で、") +
           "検査で侵蝕度が高いと言われました。皮膚に結晶のような斑点が出ています。",
         opts: [
           {
+            id: "ether.treat",
+            t: "stable",
             label: "高額な治療を受ける",
             sub:
               p.d.med >= 0.5
@@ -603,6 +780,8 @@
           },
           hollowWork
             ? {
+                id: "ether.quit",
+                t: "change",
                 label: "仕事を変えてホロウから離れる",
                 sub: "収入は減る",
                 fx: p => {
@@ -616,6 +795,8 @@
               }
             : p.d.id !== safe.id
               ? {
+                  id: "ether.move",
+                  t: "change",
                   label: safe.name + "へ引っ越す",
                   sub: "ホロウから遠い。家賃が重い",
                   fx: p => {
@@ -626,6 +807,8 @@
                   },
                 }
               : {
+                  id: "ether.indoors",
+                  t: "wait",
                   label: "外出を控える",
                   sub: "できるだけホロウに近づかない",
                   fx: p => {
@@ -636,6 +819,8 @@
                 },
           working
             ? {
+                id: "ether.endure",
+                t: "keep",
                 label: "我慢して働く",
                 sub: "いまの暮らしを守る",
                 fx: p => {
@@ -644,6 +829,8 @@
                 },
               }
             : {
+                id: "ether.wait",
+                t: "wait",
                 label: "様子を見る",
                 sub: "いまの暮らしを変えない",
                 fx: p => {
@@ -657,11 +844,14 @@
     /* 共生ホロウ災害。10歳未満は大人に連れられて避難する一択。 */
     disaster: p => ({
       title: "共生ホロウ災害",
+      key: "disaster",
       text: p.d.name + "の一角にホロウが発生しました。避難警報が鳴っています。",
       opts:
         p.age < 10
           ? [
               {
+                id: "disaster.carried",
+                t: "entrust",
                 label: "大人に連れられて避難する",
                 sub: "まだ自分では選べない",
                 fx: p => {
@@ -677,6 +867,8 @@
             ]
           : [
               {
+                id: "disaster.flee",
+                t: "flee",
                 label: "すぐに避難する",
                 sub: "安全を優先",
                 fx: p => {
@@ -690,6 +882,8 @@
                 },
               },
               {
+                id: "disaster.back",
+                t: "help",
                 label: "家族や近所の人を探しに戻る",
                 sub: "人間関係が深まる。危険",
                 fx: p => {
@@ -721,6 +915,7 @@
       }
       const base = {
         title: "エリー都陥落",
+        key: "fall",
         alarm: "near",
         text:
           "かつてない規模のホロウが都市を飲み込もうとしています。街じゅうが逃げ惑っています。" +
@@ -741,6 +936,8 @@
         }
       };
       const stay = {
+        id: "fall.stay",
+        t: "help",
         label: "残って人を助ける",
         sub: "多くを救えるかもしれない",
         fx: p => {
@@ -761,6 +958,8 @@
           text: base.text + "まだ幼いあなたに、選べることはありません。",
           opts: [
             {
+              id: "fall.hand",
+              t: "entrust",
               label: "親の手を握る",
               sub: "大人たちに任せる",
               fx: flee(0.2, "親に手を引かれて、避難の列に並んだ。"),
@@ -773,11 +972,15 @@
           ...base,
           opts: [
             {
+              id: "fall.close",
+              t: "flee",
               label: "家族とはぐれないようにする",
               sub: "手を離さない",
               fx: flee(0.17, "家族の背中だけを見て歩き、新しい都市に着いた。"),
             },
             {
+              id: "fall.friend",
+              t: "help",
               label: "友だちを探しに戻る",
               sub: "見つけられるかもしれない。危険",
               fx: p => {
@@ -800,6 +1003,8 @@
           ...base,
           opts: [
             {
+              id: "fall.flee",
+              t: "flee",
               label: "避難の列に並ぶ",
               sub: "生き延びることだけを考える",
               fx: flee(0.18, "すべてを置いて、新しい都市へ逃れた。"),
@@ -813,12 +1018,16 @@
         ...base,
         opts: [
           {
+            id: "fall.flee",
+            t: "flee",
             label: "避難の列に並ぶ",
             sub: "生き延びることだけを考える",
             fx: flee(0.18, "すべてを置いて、新しい都市へ逃れた。"),
           },
           fam
             ? {
+                id: "fall.famfirst",
+                t: "help",
                 label: "家族を先に逃がす",
                 sub: "自分は最後になる",
                 fx: p => {
@@ -837,6 +1046,8 @@
                 },
               }
             : {
+                id: "fall.neighbors",
+                t: "help",
                 label: "近所の人を連れて逃げる",
                 sub: "足の遅い人に合わせる",
                 fx: p => {
@@ -850,6 +1061,8 @@
                 },
               },
           {
+            id: "fall.goods",
+            t: "guard",
             label:
               p.job === "owner" ? "店を守ろうとする" : "家財を持ち出そうとする",
             sub: "財産を少しでも残せる。危険",
@@ -880,6 +1093,7 @@
     }
     const base = {
       title: "エリー都陥落",
+      key: "fallFar",
       alarm: "far",
       text:
         "エリー都の方角の空に、見たことのない規模のホロウが広がっていきます。夜には、避難してきた人の列が" +
@@ -893,6 +1107,8 @@
         ...base,
         opts: [
           {
+            id: "fallFar.adults",
+            t: "entrust",
             label: "大人たちのそばにいる",
             sub: "何が起きているのかは、まだわからない",
             fx: p => {
@@ -908,6 +1124,8 @@
         ...base,
         opts: [
           {
+            id: "fallFar.cook",
+            t: "share",
             label: "炊き出しを手伝う",
             sub: "できることをする",
             fx: p => {
@@ -921,6 +1139,8 @@
             },
           },
           {
+            id: "fallFar.watch",
+            t: "wait",
             label: "遠くの空を見ていた",
             sub: "目が離せない",
             fx: p => {
@@ -936,6 +1156,8 @@
       ...base,
       opts: [
         {
+          id: "fallFar.share",
+          t: "share",
           label: "受け入れて食料を分ける",
           sub: "人間関係が深まる。貯えが減る",
           fx: p => {
@@ -947,6 +1169,8 @@
           },
         },
         {
+          id: "fallFar.distance",
+          t: "shut",
           label: "距離を置く",
           sub: "いまの暮らしを守る",
           fx: p => {
@@ -956,6 +1180,8 @@
           },
         },
         {
+          id: "fallFar.search",
+          t: "help",
           label: "エリー都へ人を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
@@ -973,6 +1199,8 @@
         ...(p.job === "owner"
           ? [
               {
+                id: "fallFar.shopcook",
+                t: "share",
                 label: "店を開けて炊き出しをする",
                 sub: "貯えは大きく減る",
                 fx: p => {
@@ -1033,6 +1261,7 @@
   D.fallAlone = p => {
     const base = {
       title: "エリー都陥落",
+      key: "fallAlone",
       alarm: "near",
       text:
         "かつてない規模のホロウが都市を飲み込もうとしています。家族の姿は、もうどこにもありません。" +
@@ -1069,6 +1298,8 @@
         text: base.text + "まだ幼いあなたに、選べることはありません。",
         opts: [
           {
+            id: "fallAlone.stranger",
+            t: "entrust",
             label: "知らない大人の手を握る",
             sub: "誰かが手を差し出している",
             fx: flee(0.25, "見知らぬ大人に手を引かれて、避難の列に並んだ。"),
@@ -1081,6 +1312,8 @@
         ...base,
         opts: [
           {
+            id: "fallAlone.flee",
+            t: "flee",
             label: "ひとりで避難の列を探す",
             sub: "大人たちの流れについていく",
             fx: flee(
@@ -1089,6 +1322,8 @@
             ),
           },
           {
+            id: "fallAlone.home",
+            t: "search",
             label: "家族を探しに家へ戻る",
             sub: "誰かいるかもしれない。危険",
             fx: search(0.4, 30, "家には誰もいなかった。最後の列に飛び乗った。"),
@@ -1100,11 +1335,15 @@
       ...base,
       opts: [
         {
+          id: "fallAlone.flee",
+          t: "flee",
           label: "避難の列に並ぶ",
           sub: "家族を信じて先に逃げる",
           fx: flee(0.18, "家族の名前を呼びながら、避難の列に並んだ。"),
         },
         {
+          id: "fallAlone.search",
+          t: "search",
           label: "家族を探しに残る",
           sub: "見つけられるかもしれない。危険",
           fx: search(
@@ -1116,6 +1355,8 @@
         ...(a >= 40
           ? [
               {
+                id: "fallAlone.goods",
+                t: "guard",
                 label:
                   p.job === "owner"
                     ? "店を守ろうとする"
@@ -1149,6 +1390,7 @@
   D.fallFarAlone = p => {
     const base = {
       title: "エリー都陥落",
+      key: "fallFarAlone",
       alarm: "far",
       text:
         "エリー都の方角の空に、見たことのない規模のホロウが広がっていきます。家族はその日、エリー都に出かけていて、連絡がつきません。" +
@@ -1161,6 +1403,8 @@
         ...base,
         opts: [
           {
+            id: "fallFarAlone.adults",
+            t: "entrust",
             label: "大人たちのそばにいる",
             sub: "家族の帰りを待つ",
             fx: p => {
@@ -1172,6 +1416,8 @@
       };
     }
     const lines = {
+      id: "fallFarAlone.lines",
+      t: "search",
       label: "避難民の列に家族を探す",
       sub: "毎日、名簿と顔を確かめる",
       fx: p => {
@@ -1187,6 +1433,8 @@
         opts: [
           lines,
           {
+            id: "fallFarAlone.home",
+            t: "wait",
             label: "家で帰りを待つ",
             sub: "灯りをつけたままにしておく",
             fx: p => {
@@ -1202,6 +1450,8 @@
       ...base,
       opts: [
         {
+          id: "fallFarAlone.go",
+          t: "search",
           label: "エリー都へ家族を探しに行く",
           sub: "侵蝕と命の危険",
           fx: p => {
@@ -1217,6 +1467,8 @@
         },
         lines,
         {
+          id: "fallFarAlone.home",
+          t: "wait",
           label: "家で帰りを待つ",
           sub: "灯りをつけたままにしておく",
           fx: p => {
@@ -1273,12 +1525,39 @@
 
   /*
   ** 決断 dec の選択肢を一つランダムに選んで p に当て、選んだ選択肢を返す
-  ** （同じ1秒に生まれた人たち・一括シミュレーション用）。
+  ** （同じ1秒に生まれた人たち・一括シミュレーション用）。p.route（選択肢の
+  ** ID の配列。lab で、前に誰かが歩いた道）があれば、p.routeAt 番目の
+  ** ID の選択肢を選んで routeAt を進める。その選択肢がなければ道を捨てて
+  ** （p.offRoute に印）ランダムに選ぶ。
   */
   function autoChoose(p, dec){
-    const o = pick(dec.opts);
-    o.fx(p);
+    use(p);
+    let o = null;
+    if( p.route ){
+      o = dec.opts.find(x => x.id === p.route[p.routeAt]) || null;
+      if( o ){
+        p.routeAt++;
+      }else{
+        /* 道から外れた（版が違うなど）。この先はランダムに選ぶ */
+        p.route = null;
+        p.offRoute = true;
+      }
+    }
+    if( !o ){
+      o = pick(dec.opts);
+    }
+    apply(p, dec, o);
     return o;
+  }
+
+  /*
+  ** 決断 dec の選択肢 o を p に当てる（o.fx を呼び、hooks.pick に知らせる）。
+  ** 選択肢を当てるときは、画面からもランダムでも必ずこれを通す。
+  */
+  function apply(p, dec, o){
+    use(p);
+    o.fx(p);
+    hook("pick", p, dec, o);
   }
 
   /* ===== ランダムな出来事 ===== */
@@ -1469,6 +1748,11 @@
     if( !p.alive ){
       return;
     }
+    /* 運命を持つ人は、この年の乱数を fate と年齢から決め直す */
+    if( p.fate ){
+      p.rng = fateRng(p.fate + "|" + (p.age + 1));
+    }
+    use(p);
     p.age++;
     const j = JOBS[p.job];
     /* 教育の流れ */
@@ -1536,6 +1820,7 @@
     /* エーテリアス化 */
     if( p.alive && p.eth >= 100 ){
       die(p, "エーテリアス化");
+      hook("year", p);
       return;
     }
     /* 死亡判定 */
@@ -1561,6 +1846,7 @@
       }
     }
     p.years.push(p.alive ? (p.eth >= 60 ? "e" : "l") : "x");
+    hook("year", p);
   }
 
   /* step の死亡判定で亡くなった p の死因を、年齢と仕事から選んで返す。 */
@@ -1638,8 +1924,10 @@
     say,
     decisionFor,
     D,
+    KINDS,
     aptLabel,
     autoChoose,
+    apply,
     EVENTS,
     step,
     naturalCause,

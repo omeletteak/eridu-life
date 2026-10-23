@@ -1,0 +1,73 @@
+/*
+** lab：SQLite の中身を見る欄（console.js）の見た目。
+** 色と字は css/style.css の変数を使う。
+*/
+
+.lab-note {
+  font-size: 12px;
+}
+
+.sqlbox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sqlpresets {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sqlpresets .btn {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+#sqlText {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--f-mono);
+  /* 16px より小さいと、iPhone は入力のときに画面を拡大してしまう */
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+/* 結果の表は横に長いので、表の中だけ横に動かす */
+.sqlres {
+  overflow-x: auto;
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+.sqlres table {
+  border-collapse: collapse;
+  font-family: var(--f-mono);
+  font-size: 12px;
+}
+
+.sqlres th,
+.sqlres td {
+  border-bottom: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sqlres th {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+}
+
+.sqlerr {
+  color: var(--stamp);
+  font-family: var(--f-mono);
+  font-size: 12px;
+}

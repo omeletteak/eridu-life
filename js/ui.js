@@ -1,6 +1,9 @@
 /*
 ** 画面：描画と操作、前世の記録。
 ** data.js・sim.js・skyline.js を先に読み込むこと。
+** 旧都陥落の演出は docs/fall.md、画面の決まり（住民番号を亡くなるまで
+** 出さないなど）は docs/overview.md。本編のマークアップを変えたら
+** lab/index.html も合わせる。
 */
 (() => {
   const {
@@ -12,6 +15,7 @@
     decisionFor,
     aptLabel,
     autoChoose,
+    apply,
     step,
     fmt,
     runToEnd,
@@ -93,9 +97,14 @@
         `転出<small>旧都 → ${dest}</small></div>`
       : "";
     const deathStamp = p.alive ? "" : `<div class="stamp">${p.age}歳 没</div>`;
+    /*
+    ** 住民番号は、亡くなるまで存在ごと出さない（同じ番号に生まれ直しても
+    ** 気付かないように）
+    */
+    const head = p.alive ? "住民記録" : "住民記録 No." + p.no;
     $("idcard").classList.toggle("slammed", !!slam);
     $("idcard").innerHTML = `
-   <div><div class="eyebrow">住民記録 No.${p.no}</div><div class="name">${p.name}</div></div>
+   <div><div class="eyebrow">${head}</div><div class="name">${p.name}</div></div>
    <div class="age">${p.age}<small>歳</small></div>
    <dl>
     <dt>出生</dt><dd>${p.birthD.name} <span class="muted">· ${p.birthD.desc}</span></dd>
@@ -221,7 +230,7 @@
     */
     const choose = o => {
       box.innerHTML = "";
-      o.fx(me);
+      apply(me, dec, o);
       if( dec.alarm ){
         me.fallChoice = o.label;
         me.fallSurvived = me.alive;
@@ -514,15 +523,7 @@
     step(me);
     for(const q of peers){
       if( q.alive ){
-        step(q);
-        const d = decisionFor(q);
-        if( d ){
-          const o = autoChoose(q, d);
-          if( d.alarm ){
-            q.fallChoice = o.label;
-            q.fallSurvived = q.alive;
-          }
-        }
+        stepPeer(q);
       }
     }
     renderAll();
@@ -535,6 +536,23 @@
       return;
     }
     schedule();
+  }
+
+  /*
+  ** 同じ1秒に生まれた人 q を1年進める。step して、決断が来たら
+  ** ランダムに選び（lab で前に誰かが歩いた人なら、その道をたどる）、
+  ** 陥落なら選択と安否を残す。
+  */
+  function stepPeer(q){
+    step(q);
+    const d = decisionFor(q);
+    if( d ){
+      const o = autoChoose(q, d);
+      if( d.alarm ){
+        q.fallChoice = o.label;
+        q.fallSurvived = q.alive;
+      }
+    }
   }
 
   /* 次の1年を、1年の長さ ÷ 倍速 ミリ秒後に予約する。 */
@@ -563,6 +581,11 @@
     const job = JOBS[p.job].name;
     const eth = Math.round(p.eth);
     const hap = Math.round(p.hap);
+    /*
+    ** p.mark があれば（lab で、誰も歩いていない道を歩き終えたとき）、
+    ** 住民番号の横に小さな印を出す。意味は説明しない
+    */
+    const mark = p.mark ? `<span class="mark" aria-hidden="true">✦</span>` : "";
     /* 人生地図。1マスが1年で、100年に満たなくても100マス出す */
     const map = Array.from(
       {length: Math.max(100, p.years.length)},
@@ -570,7 +593,7 @@
     ).join("");
     $("end").hidden = false;
     $("end").innerHTML = `<div class="card ending">
-    <div class="eyebrow">最期の記録</div>
+    <div class="eyebrow">最期の記録 · No.${p.no}${mark}</div>
     <h2>${p.name}、${p.age}歳</h2>
     <div class="cause">${p.cause}</div>
     <p>${p.d.name}で${kindOf(p)}として生まれ、最後の仕事は「${job}」でした。最期の侵蝕度は${eth}、幸福は${hap}。同じ1秒に生まれた4人のうち、あなたより長く生きたのは${longer}人です。</p>
@@ -610,7 +633,8 @@
 
   /*
   ** p の一生を前世の記録の先頭に足す。各要素は {n: 名前, a: 年齢,
-  ** c: 死因, d: 最期の地区, t: 人間かシリオンか}。書けなければ何もしない。
+  ** c: 死因, d: 最期の地区, t: 人間かシリオンか, no: 住民番号,
+  ** m: 最期の印があったか}。書けなければ何もしない。
   */
   function saveMemorial(p){
     try{
@@ -621,21 +645,42 @@
         c: p.cause,
         d: p.d.name,
         t: kindOf(p),
+        no: p.no,
+        m: !!p.mark,
       });
       localStorage.setItem(KEY, JSON.stringify(m.slice(0, 10)));
     }catch(e){}
   }
 
-  /* 前世の記録を描く。 */
+  /*
+  ** 文字列 s を HTML に入れられるように置き換えて返す（& < > " '）。
+  ** 前世の記録のように localStorage から読んだものを出すときに使う
+  ** （書き換えられていても、HTML として動かないように）。
+  */
+  const esc = s =>
+    String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  /* 前世の記録を描く。localStorage から読んだ値はすべて esc を通す。 */
   function renderMemorial(){
     const m = loadMem();
     $("memorial").innerHTML = m.length
       ? m
-          .map(
-            x =>
-              `<div><span>${x.n}（${x.t}）</span>` +
-              `<span>${x.d} · ${x.a}歳 · ${x.c}</span></div>`
-          )
+          .map(x => {
+            /* 住民番号と印は、あとから足したので古い記録にはない */
+            const no = x.no ? `No.${esc(x.no)} · ` : "";
+            const mark = x.m ? `<span class="mark" aria-hidden="true">✦</span>` : "";
+            const who = `${esc(x.n)}（${esc(x.t)}）`;
+            const end = `${esc(x.d)} · ${esc(x.a)}歳 · ${esc(x.c)}`;
+            return (
+              `<div><span>${who}${mark}</span>` +
+              `<span>${no}${end}</span></div>`
+            );
+          })
           .join("")
       : `<p class="muted">まだ記録はありません。例：クロセ ミオ（猫のシリオン） · 郊外 · 47歳 · エーテリアス化</p>`;
   }
@@ -761,7 +806,15 @@
     */
     const place =
       DEBUG_FALL === "near" || DEBUG_FALL === "far" ? "" : state.place;
-    me = newPerson(era, false, place);
+    /*
+    ** Eridu.meSource があれば（lab）、本人はそこからもらう（住民番号から
+    ** 決まる人）。開発用の ?fall では使わない
+    */
+    const src = window.Eridu.meSource;
+    me = src && DEBUG_FALL === null ? src(era, place) : null;
+    if( !me ){
+      me = newPerson(era, false, place);
+    }
     if( DEBUG_FALL === "near" || DEBUG_FALL === "far" ){
       const want = DEBUG_FALL === "near" ? "inside" : "outside";
       for(let i = 0; i < 200 && me.d.zone !== want; i++){
@@ -797,8 +850,13 @@
         me = newPerson(era, false, place);
       }
     }
-    /* 同じ1秒に生まれた人どうしで名前が重ならないようにする */
-    peers = [];
+    /*
+    ** 同じ1秒に生まれた人どうしで名前が重ならないようにする。
+    ** Eridu.peerSource があれば（lab）、先にそこから人をもらい
+    ** （ほかのプレイヤーの一生。本人の陥落の年齢を揃えることもある）、
+    ** 足りない分をこの場で生む。
+    */
+    peers = window.Eridu.peerSource ? window.Eridu.peerSource(me) : [];
     while( peers.length < 4 ){
       const q = newPerson(era, true);
       if( q.name !== me.name && !peers.some(x => x.name === q.name) ){
@@ -810,11 +868,7 @@
       q.fallAge = me.fallAge;
       /* 開発用に本人を先に進めた場合は、4人も同じ年齢まで進める */
       while( q.alive && q.age < me.age ){
-        step(q);
-        const d = decisionFor(q);
-        if( d ){
-          autoChoose(q, d);
-        }
+        stepPeer(q);
       }
     }
     ended = false;
@@ -837,9 +891,13 @@
     ];
     /*
     ** 仮設住宅は必ず避難民の家庭。いまの時代のほかの街でも、旧都の
-    ** 生き残りは新都の側か郊外に移り住んだので一部はそう
+    ** 生き残りは新都の側か郊外に移り住んだので一部はそう。運命を持つ人
+    ** （lab）は、同じ人ならいつも同じになるよう運命から決める
     */
-    if( me.birthD.id === "camp" || (me.era !== "old" && Math.random() < 0.2) ){
+    const u = me.fate
+      ? window.Eridu.fateRng(me.fate + "|parents")()
+      : Math.random();
+    if( me.birthD.id === "camp" || (me.era !== "old" && u < 0.2) ){
       born.push({
         age: 0,
         text: "両親は旧都から逃れてきた人たちだった。",

@@ -1,6 +1,7 @@
 /*
 ** データ：地区・名前・仕事。
 ** ブラウザでも Node でも読める（globalThis.Eridu に載せる）。
+** 地名・時代ごとの扱い・公式の扱いは docs/setting.md。
 */
 (function(E){
   /*
