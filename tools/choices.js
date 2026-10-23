@@ -112,6 +112,10 @@ const SCENES = [
    {age: 70, job: "retired", d: "center", eth: 65}],
   ["共生ホロウ災害", D.disaster, {age: 30}],
   ["共生ホロウ災害（6歳）", D.disaster, {age: 6}],
+  ["讃頌会の誘い（仮設住宅）", D.cult, {age: 30, d: "camp"}],
+  ["讃頌会の誘い（陥落で家族が消息不明）", D.cult,
+   {era: "old", age: 30, fallAge: 25, d: "camp",
+    flags: {familyLost: 1, fall: 1, survivor: 1}}],
   /* 旧都陥落：範囲の中 */
   ["旧都陥落 · 中 · 5歳", D.fall, {era: "old", d: "kshita", age: 5}],
   ["旧都陥落 · 中 · 12歳", D.fall, {era: "old", d: "kshita", age: 12}],

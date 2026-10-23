@@ -74,18 +74,8 @@
     const moved = p.d.id !== p.birthD.id;
     const from = p.flags.survivor ? `<s class="muted">旧都</s> → ` : "";
     const addr = moved ? `<dt>住所</dt><dd>${from}${p.d.name}</dd>` : "";
-    /*
-    ** 陥落が起きるまでは、誰もまだ「旧都」と呼ばないので「エリー都」と書く。
-    ** 陥落を生き延びたか、見届けたか、陥落で亡くなったか、陥落の年齢を
-    ** 過ぎたら「旧都」
-    */
-    const fell =
-      p.flags.survivor ||
-      p.flags.witness ||
-      p.cause === "旧都陥落" ||
-      (p.fallAge !== null && p.age > p.fallAge);
-    const oldName = fell ? "旧都" : "エリー都";
-    const era = p.era === "old" ? oldName + "陥落の前" : "いまの新エリー都";
+    /* 時代の名前。「旧都陥落」は出来事の名前なので、陥落の前でもそう書く */
+    const era = p.era === "old" ? "旧都陥落の前" : "いまの新エリー都";
     const job = JOBS[p.job].name + (p.proxy ? " ＋ 裏稼業" : "");
     const family =
       (p.married ? "配偶者あり" : "ひとり") +
@@ -445,6 +435,15 @@
       })
       .join("");
     const dots = crowd.map((c, i) => `<i data-i="${i}"></i>`).join("");
+    /*
+    ** ネタバレありでは、陥落でどこが飲まれ、どう止まったかと、元凶と
+    ** された人の報道を足す（公式の人物の名前は出さない）。
+    */
+    const truth = window.Eridu.spoiler
+      ? `<p class="muted crowd-legend">飲まれたのは、ミネルヴァ区とプルートー区の広い範囲だった。` +
+        `南西から北東へ14基の式輿の塔を爆破してできた大地溝が、ホロウの広がりをようやく止めた。` +
+        `のちに、陥落の元凶としてある人物の名前が報じられた。真相はまだ分かっていない。</p>`
+      : "";
     const next = withButton
       ? `<div class="row" style="margin-top:12px">` +
         `<button class="btn" id="reportNext" hidden>先へ進む</button></div>`
@@ -455,6 +454,7 @@
     <div class="crowd-head"><span class="eyebrow">あの日、旧都にいた100人</span><span class="crowd-count" id="crowdCount">集計中…</span></div>
     <div class="crowd" id="crowd">${dots}</div>
     <p class="muted crowd-legend"><span class="dot ok"></span>新エリー都に着いた　<span class="dot lost"></span>消息不明</p>
+    ${truth}
     ${next}
   </div>`;
     const first = quick ? 0 : 900,
