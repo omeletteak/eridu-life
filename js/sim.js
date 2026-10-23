@@ -28,7 +28,7 @@
   ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
   ** 新しいシーズンを始める。
   */
-  E.VERSION = 5;
+  E.VERSION = 6;
 
   /*
   ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
@@ -357,8 +357,8 @@
   **   alarm  旧都陥落のときだけ。範囲の中は "near"、外は "far"
   **
   ** 同じ決断は一生に一度だけ出す（p.flags に印をつける）。優先順は
-  ** 旧都陥落 → ホロウ災害 → 侵蝕の症状 → 讃頌会の誘い → 分かれ道 →
-  ** 節目（15/18/24/29/42/62歳）。
+  ** 旧都陥落 → ホロウ災害 → 侵蝕の症状 → 讃頌会の誘い → 消息の連絡 →
+  ** 侵蝕の薬 → 見逃す代わりの金 → 分かれ道 → 節目（15/18/24/29/42/62歳）。
   */
   function decisionFor(p){
     if( !p.alive ){
@@ -399,6 +399,33 @@
     if( p.age >= 16 && !f.cultAsked && cultReason(p) && R() < CULT_RATE ){
       f.cultAsked = 1;
       return D.cult(p);
+    }
+    /* 家族が消息不明の人に「消息を知っている」という連絡（一生に一度） */
+    if(
+      p.age >= 14 &&
+      f.familyLost &&
+      !f.reunited &&
+      !f.scamAsked &&
+      R() < SCAM_RATE
+    ){
+      f.scamAsked = 1;
+      return D.scam(p);
+    }
+    /* 侵蝕が気になりはじめた人に、効くという薬の話（一生に一度） */
+    if( p.age >= 16 && p.eth >= 40 && !f.cureAsked && R() < CURE_RATE ){
+      f.cureAsked = 1;
+      return D.cure(p);
+    }
+    /* 悪の側にいる人に、局員が見逃す代わりに金を求める */
+    if(
+      p.age >= 18 &&
+      darkWay(p) &&
+      p.job !== "police" &&
+      p.age - (f.shakeAt || 0) >= CROSS_GAP &&
+      R() < SHAKE_RATE
+    ){
+      f.shakeAt = p.age;
+      return D.shake(p);
     }
     /*
     ** 分かれ道：悪の側にいれば抜ける機会、善の側にいれば誘いが、
@@ -1381,39 +1408,62 @@
 
   /*
   ** p がいま立てる分かれ道の種類を返す。なければ null。
-  ** 悪の側にいれば抜ける道（"cult" / "proxy" / "gang" / "raider"。この順に
-  ** 優先）、善の側にいれば誘い（"regang" 昔のギャング仲間 / "dive"
-  ** 借金を返すための無許可の潜行 / "side" 裏稼業）。引退した人には来ない。
+  ** 悪の側にいれば抜ける道（darkWay）、善の側にいれば誘い（"bribe" 局員に
+  ** 押収品の横流し / "regang" 昔のギャング仲間 / 借金があれば "dive"
+  ** 無許可の潜行か "swindle" 避難民をねらう詐欺 / ほかは "side" 裏稼業か
+  ** "peddle" 偽薬売り）。引退した人と学生には来ない。
   */
   function crossWay(p){
-    const f = p.flags;
     if( p.job === "retired" || p.job === "student" ){
       return null;
     }
-    if( f.cult ){
-      return "cult";
+    const dark = darkWay(p);
+    if( dark ){
+      return dark;
     }
-    if( p.proxy ){
-      return "proxy";
+    if( p.job === "police" ){
+      return "bribe";
     }
-    if( p.job === "gang" ){
-      return "gang";
-    }
-    if( p.job === "raider" ){
-      return "raider";
-    }
-    if( f.wild ){
+    if( p.flags.wild ){
       return "regang";
     }
+    /* 乱数を使わず、年齢の偶奇でどちらの誘いかを決める */
     if( p.money < 0 ){
-      return "dive";
+      return p.age % 2 ? "dive" : "swindle";
     }
-    return "side";
+    return p.age % 2 ? "side" : "peddle";
+  }
+
+  /*
+  ** 悪の側の種類。抜ける機会（cross.reform）が来るのはこれら。
+  ** darkWay はこの順に調べる。
+  */
+  const REFORM_WAYS = [
+    "cult", "corrupt", "fraud", "peddler", "proxy", "gang", "raider",
+  ];
+
+  /*
+  ** p がいる悪の側の種類（REFORM_WAYS のどれか）を返す。善の側なら
+  ** null。讃頌会・横流し（局員のときだけ）・詐欺・偽薬売り・裏稼業・
+  ** ギャング・無許可のレイダー。
+  */
+  function darkWay(p){
+    const f = p.flags;
+    const on = {
+      cult: f.cult,
+      corrupt: f.corrupt && p.job === "police",
+      fraud: f.fraud,
+      peddler: f.peddler,
+      proxy: p.proxy,
+      gang: p.job === "gang",
+      raider: p.job === "raider",
+    };
+    return REFORM_WAYS.find(w => on[w]) || null;
   }
 
   /* 分かれ道の種類 way が、その年に p に来る確率を返す。 */
   function crossRate(p, way){
-    if( ["cult", "proxy", "gang", "raider"].includes(way) ){
+    if( REFORM_WAYS.includes(way) ){
       return 0.08;
     }
     return p.money < 0 ? 0.04 : 0.02;
@@ -1525,8 +1575,62 @@
           say(p, "裏でホロウの案内を請け負うようになった。", "eth big");
         },
       },
+      corrupt: {
+        text: "内部監査が入るという噂が流れるなか、先輩が「今のうちに手を引け」と言ってくれました。",
+        label: "横流しから手を引く",
+        sub: "見返りは消える。追われる心配も減る",
+        fx: p => {
+          p.flags.corrupt = 0;
+          say(p, "押収品の横流しから手を引いた。先輩は何も言わずにいてくれた。", "good big");
+        },
+      },
+      fraud: {
+        text: "だます相手の名簿の中に、知っている人の名前を見つけました。",
+        label: "詐欺から手を引く",
+        sub: "稼ぎは消える",
+        fx: p => {
+          p.flags.fraud = 0;
+          say(p, again + "詐欺から手を引いた。だました人たちのことは忘れない。", "good big");
+        },
+      },
+      peddler: {
+        text: "薬を売った相手が、侵蝕で亡くなったと聞きました。",
+        label: "薬を売るのをやめる",
+        sub: "稼ぎは消える",
+        fx: p => {
+          p.flags.peddler = 0;
+          say(p, again + "効かない薬を売るのをやめた。", "good big");
+        },
+      },
+      bribe: {
+        text: "同僚から、押収したエーテル資源を裏に流さないかと持ちかけられました。見返りは悪くありません。",
+        label: "話に乗る",
+        sub: "見返りがある。明るみに出れば職を失う",
+        fx: p => {
+          p.flags.corrupt = 1;
+          say(p, "押収品の横流しに手を貸すようになった。", "big");
+        },
+      },
+      swindle: {
+        text: "借金がかさむなか、避難民の名簿を使った「消息を知っている」詐欺を手伝わないかと持ちかけられました。",
+        label: "手伝う",
+        sub: "稼げる。捕まれば罰金",
+        fx: p => {
+          p.flags.fraud = 1;
+          say(p, "家族を探す人たちに、嘘の消息を売るようになった。", "big");
+        },
+      },
+      peddle: {
+        text: "「侵蝕が抜ける」という薬を売り歩けば稼げると、顔見知りに持ちかけられました。中身は何の薬でもありません。",
+        label: "売る側に回る",
+        sub: "稼げる。捕まれば罰金",
+        fx: p => {
+          p.flags.peddler = 1;
+          say(p, "効かない薬を、侵蝕に悩む人たちに売りはじめた。", "big");
+        },
+      },
     }[way];
-    const good = ["cult", "proxy", "gang", "raider"].includes(way);
+    const good = REFORM_WAYS.includes(way);
     const move = {
       id: good ? "cross.reform" : "cross.fall",
       t: good ? "change" : "stray",
@@ -1546,6 +1650,126 @@
       opts: good ? [move, stay] : [move, refuse],
     };
   };
+
+  /* ===== 人の悪意：詐欺・偽薬・見逃す代わりの金 ===== */
+
+  /* 家族が消息不明の人に、消息を売る連絡が来る毎年の確率 */
+  const SCAM_RATE = 0.1;
+  /* 侵蝕40以上の人に、効くという薬の話が来る毎年の確率 */
+  const CURE_RATE = 0.1;
+  /* 悪の側の人に、局員が金を求めてくる毎年の確率 */
+  const SHAKE_RATE = 0.05;
+
+  /*
+  ** 「あなたの家族の消息を知っている」という連絡（家族が消息不明の人）。
+  ** 払うと貯えが減り、ほとんどは嘘。ごくまれに本当で、家族の一人に会える。
+  */
+  D.scam = p => ({
+    title: p.age + "歳 · 消息",
+    key: "scam",
+    text: "「あなたの家族の消息を知っている」という人から連絡がありました。手付金を払えば、居場所を教えるといいます。",
+    opts: [
+      {
+        id: "scam.pay",
+        t: "search",
+        label: "払う",
+        sub: "望みにかける。貯えが減る",
+        fx: p => {
+          p.money -= 150;
+          if( R() < 0.1 ){
+            p.flags.reunited = 1;
+            p.rel = clamp(p.rel + 15);
+            p.hap = clamp(p.hap + 15);
+            say(p, "本当だった。教えられた場所で、家族の一人に会えた。", "good big");
+          }else{
+            p.hap = clamp(p.hap - 10);
+            say(p, "教えられた場所には誰もいなかった。相手とは連絡がつかなくなった。", "bad");
+          }
+        },
+      },
+      {
+        id: "scam.refuse",
+        t: "shut",
+        label: "疑って断る",
+        sub: "貯えは守れる",
+        fx: p => {
+          p.hap = clamp(p.hap - 3);
+          say(p, "電話を切った。本当だったのかもしれない、と時々思う。");
+        },
+      },
+    ],
+  });
+
+  /*
+  ** 「侵蝕が抜ける」と評判の薬（侵蝕40以上）。薬は効かない。病院なら
+  ** 通える医療（p.d.med）の分だけ侵蝕が下がる。
+  */
+  D.cure = p => ({
+    title: p.age + "歳 · 薬",
+    key: "cure",
+    text: "「侵蝕が抜ける」と評判の薬を、知り合いが勧めてきました。高価ですが、効いたという話も聞きます。",
+    opts: [
+      {
+        id: "cure.buy",
+        t: "venture",
+        label: "薬を買う",
+        sub: "効くかもしれない。高い",
+        fx: p => {
+          p.money -= 150;
+          p.hap = clamp(p.hap - 5);
+          say(p, "薬を飲み続けたが、効き目はなかった。売っていた人は、もういなかった。", "bad");
+        },
+      },
+      {
+        id: "cure.clinic",
+        t: "stable",
+        label: "病院で診てもらう",
+        sub: "医療は" + level(p.d.med),
+        fx: p => {
+          p.money -= 40;
+          p.eth = clamp(p.eth - 12 * p.d.med);
+          say(p, "病院で診てもらい、侵蝕を抑える処置を受けた。", "good");
+        },
+      },
+    ],
+  });
+
+  /*
+  ** 悪の側にいる人に、治安局の局員が見逃す代わりに金を求めてくる。
+  ** 払えば何もない。断ると 40% で摘発されて罰金。
+  */
+  D.shake = p => ({
+    title: p.age + "歳 · 取引",
+    key: "shake",
+    text: "治安局の局員が、見逃す代わりに金を求めてきました。",
+    opts: [
+      {
+        id: "shake.pay",
+        t: "stable",
+        label: "金を払う",
+        sub: "貯えが減る",
+        fx: p => {
+          p.money -= 120;
+          say(p, "金を払った。局員は何も見なかったことにした。");
+        },
+      },
+      {
+        id: "shake.refuse",
+        t: "venture",
+        label: "断る",
+        sub: "摘発されるかもしれない",
+        fx: p => {
+          if( R() < 0.4 ){
+            p.money -= 250;
+            p.hap = clamp(p.hap - 8);
+            say(p, "断ると、その週のうちに摘発された。罰金を払った。", "bad big");
+          }else{
+            say(p, "断った。局員はそれきり来なかった。");
+          }
+        },
+      },
+    ],
+  });
 
   /* ===== 陥落の時点で、自分以外の家族がすでに消息不明 ===== */
 
@@ -2263,6 +2487,68 @@
             : "集まりの様子がおかしいと気づき、通うのをやめた。",
           "bad"
         );
+      },
+    },
+    /*
+    ** 悪の側の稼ぎと摘発。詐欺・偽薬売り・横流しは、毎年 20% で稼ぐか
+    ** 捕まる（捕まると足を洗う）。横流しが明るみに出ると治安局を追われる。
+    */
+    {
+      p: p => (p.flags.fraud ? 0.2 : 0),
+      fx: p => {
+        if( R() < 0.2 ){
+          p.flags.fraud = 0;
+          p.money -= 300;
+          p.hap = clamp(p.hap - 10);
+          p.rel = clamp(p.rel - 10);
+          say(p, "詐欺で捕まり、罰金を払った。名前が知れ渡った。", "bad big");
+        }else{
+          p.money += 120;
+          say(p, "家族を探す人から、嘘の消息と引き換えに手付金を受け取った。");
+        }
+      },
+    },
+    {
+      p: p => (p.flags.peddler ? 0.2 : 0),
+      fx: p => {
+        if( R() < 0.15 ){
+          p.flags.peddler = 0;
+          p.money -= 250;
+          p.hap = clamp(p.hap - 8);
+          say(p, "偽薬を売っていたことが知られ、治安局に捕まった。", "bad big");
+        }else{
+          p.money += 100;
+          say(p, "侵蝕に効くという薬を、仮設住宅で売り歩いた。");
+        }
+      },
+    },
+    {
+      p: p => (p.flags.corrupt && p.job === "police" ? 0.2 : 0),
+      fx: p => {
+        if( R() < 0.15 ){
+          p.flags.corrupt = 0;
+          p.job = "shop";
+          p.money -= 200;
+          p.hap = clamp(p.hap - 15);
+          say(p, "横流しが内部監査で明るみに出た。治安局を追われ、商店街で働きはじめた。", "bad big");
+        }else{
+          p.money += 150;
+          say(p, "押収品を裏に流し、見返りを受け取った。");
+        }
+      },
+    },
+    /* 陥落やホロウ災害に遭った人が、偽の募金にお金を出す（一生に一度）。 */
+    {
+      p: p =>
+        (p.flags.survivor || p.flags.witness || p.flags.disDone) &&
+        !p.flags.donated
+          ? 0.03
+          : 0,
+      fx: p => {
+        p.flags.donated = 1;
+        p.money -= 30;
+        p.hap = clamp(p.hap - 3);
+        say(p, "避難民の支援をうたう募金にお金を出した。あとで偽物だったと知った。", "bad");
       },
     },
     /* 孤児は18歳で施設を出て、ひとりで暮らしはじめる。 */
