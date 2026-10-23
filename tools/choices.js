@@ -150,6 +150,28 @@ const SCENES = [
   ["侵蝕の薬（ルミナスクエア）", D.cure, {age: 40, d: "center", eth: 45}],
   ["見逃す代わりの金（ホロウレイダー）", D.shake,
    {age: 30, job: "raider"}],
+  ["18歳 · 仕事（衛非地区・澄輝坪）", D.work, {age: 18, d: "waifei"}],
+  ["共生ホロウ災害（衛非地区・澄輝坪）", D.disaster, {age: 30, d: "waifei"}],
+  ["ミアズマ · 路地裏の医者", D.alley, {age: 40, d: "waifei", eth: 45}],
+  ["ミアズマ · 抑制剤をやめるか（良い記憶が多い）",
+   p => {
+     p.memGood = 6;
+     p.memBad = 2;
+     return D.alleyStop(p);
+   },
+   {age: 45, d: "waifei", eth: 55, flags: {miaUse: 1, miaPull: 3}}],
+  ["ミアズマ · 抑制剤をやめるか（辛い記憶が多い）",
+   p => {
+     p.memGood = 1;
+     p.memBad = 6;
+     return D.alleyStop(p);
+   },
+   {age: 45, d: "waifei", eth: 55, flags: {miaUse: 1}}],
+  ["ミアズマ · 採掘場の噴出", D.erupt, {age: 30, d: "waifei", job: "miner"}],
+  ["分かれ道 · 運び屋の誘い", p => D.cross(p, "carry"),
+   {age: 30, d: "waifei", job: "shop"}],
+  ["分かれ道 · 運び屋をやめる", p => D.cross(p, "courier"),
+   {age: 30, d: "waifei", job: "shop", flags: {courier: 1}}],
   ["旧都陥落 · 局員 · 中 · 前線（ひとり）", D.fallPolice,
    {era: "old", d: "kshita", age: 30, job: "police", flags: {order: "front"}}],
   ["旧都陥落 · 局員 · 中 · 後方（家族あり）", D.fallPolice,

@@ -28,7 +28,7 @@
   ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
   ** 新しいシーズンを始める。
   */
-  E.VERSION = 6;
+  E.VERSION = 7;
 
   /*
   ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
@@ -329,11 +329,24 @@
 
   /*
   ** p の人生の記録に、今の年齢で text を足す。cls は表示の種類
-  ** （good / bad / eth / big を空白区切りで）。isPeer の人は記録に足さない
-  ** （hooks.said には渡す）。
+  ** （good / bad / eth / big / mia を空白区切りで）。isPeer の人は記録に
+  ** 足さない（hooks.said には渡す）。good と bad は p.memGood / p.memBad に
+  ** 数える（mia の行は数えない）。
   */
   function say(p, text, cls = ""){
     hook("said", p, text, cls);
+    /*
+    ** 良い記憶と辛い記憶の数（ミアズマの反応に使う）。並走する人は記録を
+    ** 残さないので、記録ではなく数で持つ。ミアズマが作った行は数えない
+    */
+    const c = " " + cls + " ";
+    if( !c.includes(" mia ") ){
+      if( c.includes(" good ") ){
+        p.memGood = (p.memGood || 0) + 1;
+      }else if( c.includes(" bad ") ){
+        p.memBad = (p.memBad || 0) + 1;
+      }
+    }
     if( p.isPeer ){
       return;
     }
@@ -358,7 +371,8 @@
   **
   ** 同じ決断は一生に一度だけ出す（p.flags に印をつける）。優先順は
   ** 旧都陥落 → ホロウ災害 → 侵蝕の症状 → 讃頌会の誘い → 消息の連絡 →
-  ** 侵蝕の薬 → 見逃す代わりの金 → 分かれ道 → 節目（15/18/24/29/42/62歳）。
+  ** 侵蝕の薬 → 見逃す代わりの金 → ミアズマの噴出 → 抑制剤をやめるか →
+  ** 路地裏の医者 → 分かれ道 → 節目（15/18/24/29/42/62歳）。
   */
   function decisionFor(p){
     if( !p.alive ){
@@ -426,6 +440,31 @@
     ){
       f.shakeAt = p.age;
       return D.shake(p);
+    }
+    /* 採掘場でのミアズマの噴出 */
+    if(
+      p.job === "miner" &&
+      p.age - (f.eruptAt || 0) >= ERUPT_GAP &&
+      R() < ERUPT_RATE
+    ){
+      f.eruptAt = p.age;
+      return D.erupt(p);
+    }
+    /* 路地裏の医者の抑制剤を使っている人に、やめるかどうか（3年ごと） */
+    if( f.miaUse && p.age - f.miaUseAt >= 3 ){
+      f.miaUseAt = p.age;
+      return D.alleyStop(p);
+    }
+    /* 衛非地区の、侵蝕かつらさを抱えた人に、路地裏の医者の話（一生に一度） */
+    if(
+      p.age >= 16 &&
+      waifeiNow(p) &&
+      !f.alleyAsked &&
+      (p.eth >= 40 || p.hap < 35) &&
+      R() < ALLEY_RATE
+    ){
+      f.alleyAsked = 1;
+      return D.alley(p);
     }
     /*
     ** 分かれ道：悪の側にいれば抜ける機会、善の側にいれば誘いが、
@@ -642,6 +681,24 @@
               say(p, "無許可のホロウレイダーになった。", "eth big");
             },
           },
+          ...(waifeiNow(p)
+            ? [
+                {
+                  id: "work.miner",
+                  t: "stable",
+                  label: "輝嶺石の採掘場で働く",
+                  sub: "ロープウェイでホロウに通う。侵蝕",
+                  fx: p => {
+                    p.job = "miner";
+                    say(
+                      p,
+                      "ロープウェイでラマニアンホロウに通い、輝嶺石の採掘場で働きはじめた。",
+                      "big"
+                    );
+                  },
+                },
+              ]
+            : []),
           ...(p.flags.wild
             ? [
                 {
@@ -846,8 +903,9 @@
     */
     ether: p => {
       const hollowWork =
-        ["raider", "police", "build", "corp", "gang"].includes(p.job) ||
-        p.proxy;
+        ["raider", "police", "build", "corp", "gang", "miner"].includes(
+          p.job
+        ) || p.proxy;
       const working = !["none", "student", "retired"].includes(p.job);
       const preFall = p.fallAge !== null && !p.flags.fall;
       const safe = DISTRICTS.find(
@@ -882,7 +940,10 @@
                 label: "仕事を変えてホロウから離れる",
                 sub: "収入は減る",
                 fx: p => {
-                  if( ["raider", "police", "build", "gang"].includes(p.job) ){
+                  const hollowJobs = [
+                    "raider", "police", "build", "gang", "miner",
+                  ];
+                  if( hollowJobs.includes(p.job) ){
                     p.job = "shop";
                   }
                   p.proxy = false;
@@ -990,6 +1051,11 @@
                   }else{
                     p.rel = clamp(p.rel + 15);
                     say(p, "逃げ遅れた隣人を連れ出した。", "good big");
+                    /* 衛非地区のホロウでは、ミアズマに触れることがある */
+                    if( waifeiNow(p) ){
+                      say(p, "崩れた路地で、" + miaName() + "を浴びた。", "eth");
+                      touchMiasma(p, 5);
+                    }
                   }
                 },
               },
@@ -1339,6 +1405,9 @@
     if( f.orphan ){
       return "身寄りのないまま、";
     }
+    if( (f.miaPull || 0) >= 2 ){
+      return "昔の記憶に浸る日が増えるなか、";
+    }
     if( f.survivor || p.d.id === "camp" ){
       return "仮設住宅の暮らしが続くなか、";
     }
@@ -1411,7 +1480,8 @@
   ** 悪の側にいれば抜ける道（darkWay）、善の側にいれば誘い（"bribe" 局員に
   ** 押収品の横流し / "regang" 昔のギャング仲間 / 借金があれば "dive"
   ** 無許可の潜行か "swindle" 避難民をねらう詐欺 / ほかは "side" 裏稼業か
-  ** "peddle" 偽薬売り）。引退した人と学生には来ない。
+  ** "peddle" 偽薬売り。いまの時代の衛非地区では "carry" 路地裏の医者の
+  ** 運び屋も）。引退した人と学生には来ない。
   */
   function crossWay(p){
     if( p.job === "retired" || p.job === "student" ){
@@ -1427,7 +1497,10 @@
     if( p.flags.wild ){
       return "regang";
     }
-    /* 乱数を使わず、年齢の偶奇でどちらの誘いかを決める */
+    /* 乱数を使わず、年齢でどの誘いかを決める */
+    if( waifeiNow(p) && p.age % 3 === 0 ){
+      return "carry";
+    }
     if( p.money < 0 ){
       return p.age % 2 ? "dive" : "swindle";
     }
@@ -1439,13 +1512,14 @@
   ** darkWay はこの順に調べる。
   */
   const REFORM_WAYS = [
-    "cult", "corrupt", "fraud", "peddler", "proxy", "gang", "raider",
+    "cult", "corrupt", "fraud", "peddler", "courier", "proxy", "gang",
+    "raider",
   ];
 
   /*
   ** p がいる悪の側の種類（REFORM_WAYS のどれか）を返す。善の側なら
-  ** null。讃頌会・横流し（局員のときだけ）・詐欺・偽薬売り・裏稼業・
-  ** ギャング・無許可のレイダー。
+  ** null。讃頌会・横流し（局員のときだけ）・詐欺・偽薬売り・路地裏の
+  ** 医者の運び屋・裏稼業・ギャング・無許可のレイダー。
   */
   function darkWay(p){
     const f = p.flags;
@@ -1454,6 +1528,7 @@
       corrupt: f.corrupt && p.job === "police",
       fraud: f.fraud,
       peddler: f.peddler,
+      courier: f.courier,
       proxy: p.proxy,
       gang: p.job === "gang",
       raider: p.job === "raider",
@@ -1611,6 +1686,26 @@
           say(p, "押収品の横流しに手を貸すようになった。", "big");
         },
       },
+      courier: {
+        text: "薬を渡した人が、もう誰のことも分からなくなったと聞きました。",
+        label: "運び屋をやめる",
+        sub: "稼ぎは消える",
+        fx: p => {
+          p.flags.courier = 0;
+          say(p, again + "路地裏の医者の薬を運ぶのをやめた。", "good big");
+        },
+      },
+      carry: {
+        text:
+          "澄輝坪の路地裏の医者から、薬を患者の家まで運ぶ仕事を頼まれました。" +
+          (E.spoiler ? "医者は讃頌会の信徒で、薬にはミアズマが混ぜられています。" : "報酬は妙に多めです。"),
+        label: "引き受ける",
+        sub: "稼げる。捕まれば罰金",
+        fx: p => {
+          p.flags.courier = 1;
+          say(p, "路地裏の医者の薬を運ぶようになった。", "big");
+        },
+      },
       swindle: {
         text: "借金がかさむなか、避難民の名簿を使った「消息を知っている」詐欺を手伝わないかと持ちかけられました。",
         label: "手伝う",
@@ -1766,6 +1861,246 @@
           }else{
             say(p, "断った。局員はそれきり来なかった。");
           }
+        },
+      },
+    ],
+  });
+
+  /* ===== ミアズマ ===== */
+
+  /* 路地裏の医者の話が来る毎年の確率 */
+  const ALLEY_RATE = 0.12;
+  /* 採掘場でミアズマが噴き出す毎年の確率と、噴出のあいだにあける年数 */
+  const ERUPT_RATE = 0.06;
+  const ERUPT_GAP = 3;
+
+  /*
+  ** p がいまの時代の衛非地区（澄輝坪・泅瓏囲）にいれば true。ミアズマが
+  ** 出てくるのはここだけ（シーズン2の話なので、旧都の時代には出さない）。
+  */
+  function waifeiNow(p){
+    return p.fallAge === null && ["waifei", "qiulong"].includes(p.d.id);
+  }
+
+  /*
+  ** ミアズマの呼び名を返す。ネタバレなしでは正体が分からないまま
+  ** 「赤い泥のようなもの」と書く。
+  */
+  const miaName = () => (E.spoiler ? "ミアズマ" : "赤い泥のようなもの");
+
+  /* 文 s の終わりの「。」を取って返す。 */
+  const strip = s => s.replace(/。$/, "");
+
+  /*
+  ** p の記録から、印 mark（"good" か "bad"）の付いた行の文を集めて返す。
+  ** ミアズマが作った行と、今年の行は入れない（過去の記憶だけ）。並走する
+  ** 人は記録がないので空になる。
+  */
+  function memories(p, mark){
+    return p.log
+      .filter(l => {
+        const c = " " + l.cls + " ";
+        return (
+          l.age < p.age && c.includes(" " + mark + " ") && !c.includes(" mia ")
+        );
+      })
+      .map(l => l.text);
+  }
+
+  /*
+  ** p がミアズマに amount だけ触れる。ミアズマそのものに快楽も依存も
+  ** なく、本人が良いと思っている過去の記憶を掘り返したり、混ぜ合わせて
+  ** 捏造したりするだけ。良い記憶（memGood）が辛い記憶（memBad）以上なら
+  ** 心地よい記憶がよみがえり（幸福が少し上がり、また触れたくなる
+  ** miaPull が増える）、辛い記憶が多ければ悲しみだけが残る（幸福が
+  ** 下がる）。侵蝕も進み、触れた量 p.mia は毎年の侵蝕を速める（step）。
+  ** よみがえる記憶の文は記録から年齢で選ぶ（乱数は引かない）。記録が
+  ** なければ決まった文にする。
+  */
+  function touchMiasma(p, amount){
+    const tol = 1.4 - p.apt / 100;
+    p.mia = (p.mia || 0) + amount;
+    p.eth = clamp(p.eth + amount * tol);
+    const sweet = (p.memGood || 0) >= (p.memBad || 0);
+    const lines = memories(p, sweet ? "good" : "bad");
+    const a = lines[p.age % (lines.length || 1)],
+      b = lines[(p.age * 7 + 3) % (lines.length || 1)];
+    if( sweet ){
+      p.hap = clamp(p.hap + 6);
+      p.flags.miaPull = (p.flags.miaPull || 0) + 1;
+      /* 2つ以上あって年齢が奇数なら、2つを混ぜた記憶を作る */
+      const text = !a
+        ? "懐かしい夢のような記憶が、頭の中いっぱいに広がった。"
+        : a !== b && p.age % 2
+          ? strip(a) + "日に、" + b
+          : a + "——その日のことが、手に取れるほどはっきりとよみがえった。";
+      say(p, text, "good mia");
+    }else{
+      p.hap = clamp(p.hap - 8);
+      const text = !a
+        ? "思い出したくないことばかりが、頭の中に浮かんでは消えた。"
+        : a + "——その日のことが、何度も頭の中で繰り返された。";
+      say(p, text, "bad mia");
+    }
+  }
+
+  /*
+  ** 路地裏の医者の話（いまの時代の衛非地区で、侵蝕40以上か幸福35未満）。
+  ** 抑制剤は安く、侵蝕も下がったように見えるが、微量のミアズマが
+  ** 混ぜられている。ネタバレありでは医者が讃頌会の信徒だと書く。
+  */
+  D.alley = p => ({
+    title: p.age + "歳 · 路地裏の医者",
+    key: "alley",
+    text:
+      "澄輝坪の路地裏に、安く侵蝕抑制剤を出してくれる腕のいい医者がいると聞きました。" +
+      (E.spoiler
+        ? "その医者は讃頌会の信徒で、抑制剤には微量のミアズマが混ぜられています。"
+        : ""),
+    opts: [
+      {
+        id: "alley.use",
+        t: "venture",
+        label: "路地裏の医者の抑制剤を使う",
+        sub: "安い。侵蝕が下がるらしい",
+        fx: p => {
+          p.flags.miaUse = 1;
+          p.flags.miaUseAt = p.age;
+          p.money -= 20;
+          p.eth = clamp(p.eth - 6);
+          say(p, "路地裏の医者の抑制剤を使いはじめた。体が軽くなった気がした。");
+          touchMiasma(p, 3);
+        },
+      },
+      {
+        id: "alley.clinic",
+        t: "stable",
+        label: "大きな病院にかかる",
+        sub: "医療は" + level(p.d.med) + "。費用がかかる",
+        fx: p => {
+          p.money -= 60;
+          p.eth = clamp(p.eth - 12 * p.d.med);
+          say(p, "大きな病院で、侵蝕を抑える処置を受けた。", "good");
+        },
+      },
+      {
+        id: "alley.refuse",
+        t: "shut",
+        label: "何もしない",
+        sub: "怪しい話には乗らない",
+        fx: p => say(p, "路地裏の医者には近づかなかった。"),
+      },
+    ],
+  });
+
+  /*
+  ** 抑制剤を使い続けている人に、やめるかどうか（3年ごと）。やめようと
+  ** しても、また手を伸ばすことがある。やめきれる見込みは、人間関係と
+  ** 支えてくれる人（配偶者・子ども・ボンプ）しだいで、心地よい記憶に
+  ** 浸った回数（miaPull）が多いほど下がる。辛い記憶ばかりよみがえる人は、
+  ** 自分から離れやすい。病院の力を借りると、医療の水準の分だけ上がる。
+  */
+  D.alleyStop = p => {
+    const f = p.flags;
+    const backed = p.married || p.kids > 0 || f.bangboo;
+    const sad = (p.memBad || 0) > (p.memGood || 0);
+    const chance = extra =>
+      clamp(
+        0.35 +
+          p.rel / 250 +
+          (backed ? 0.15 : 0) +
+          (sad ? 0.25 : 0) -
+          (f.miaPull || 0) * 0.04 +
+          extra,
+        0.05,
+        0.95
+      );
+    /* やめる選択肢の fx を作る。確率 c でやめきれる */
+    const quit = (c, line) => p => {
+      if( R() < c ){
+        p.flags.miaUse = 0;
+        p.hap = clamp(p.hap - 5);
+        say(p, line, "good big");
+      }else{
+        say(p, "やめようとしたが、また路地裏に足が向いた。", "bad");
+      }
+    };
+    return {
+      title: p.age + "歳 · 抑制剤",
+      key: "alleyStop",
+      text: sad
+        ? "抑制剤を使うたびに、思い出したくない記憶ばかりがよみがえります。侵蝕も前より進んでいます。"
+        : "抑制剤を使うたびに、懐かしい記憶がよみがえります。けれど侵蝕は前より進み、体の痛みも増えています。",
+      opts: [
+        {
+          id: "alleyStop.keep",
+          t: "keep",
+          label: "使い続ける",
+          sub: sad ? "やめるのも怖い" : "あの記憶にまた会える",
+          fx: p => say(p, "抑制剤を使い続けた。"),
+        },
+        {
+          id: "alleyStop.quit",
+          t: "change",
+          label: "自分でやめる",
+          sub: "つらい時期が続く",
+          fx: quit(chance(0), "路地裏の医者のもとへ通うのをやめた。"),
+        },
+        {
+          id: "alleyStop.clinic",
+          t: "stable",
+          label: "病院の力を借りてやめる",
+          sub: "医療は" + level(p.d.med) + "。費用 100万",
+          fx: p => {
+            p.money -= 100;
+            quit(
+              chance(0.3 * p.d.med),
+              E.spoiler
+                ? "病院で、抑制剤にミアズマが混ぜられていたと知った。治療を受けて、路地裏から離れた。"
+                : "病院で、抑制剤に何かが混ぜられていたと知った。治療を受けて、路地裏から離れた。"
+            )(p);
+          },
+        },
+      ],
+    };
+  };
+
+  /*
+  ** 輝嶺石の採掘場で、ミアズマが突然噴き出す。すぐ引き上げるか、
+  ** 逃げ遅れた仲間を探すか。どちらもミアズマに触れる。
+  */
+  D.erupt = p => ({
+    title: p.age + "歳 · 噴出",
+    key: "erupt",
+    text: "ラマニアンホロウの採掘場で、" + miaName() + "が突然噴き出しました。ロープウェイの乗り場に人が殺到しています。",
+    opts: [
+      {
+        id: "erupt.flee",
+        t: "flee",
+        label: "すぐロープウェイで引き上げる",
+        sub: "安全を優先",
+        fx: p => {
+          if( R() < 0.02 ){
+            die(p, "ホロウ内での事故");
+            return;
+          }
+          say(p, "最後のゴンドラに飛び乗って、地上に戻った。");
+          touchMiasma(p, 3);
+        },
+      },
+      {
+        id: "erupt.help",
+        t: "help",
+        label: "逃げ遅れた仲間を探す",
+        sub: "人間関係が深まる。危険",
+        fx: p => {
+          if( R() < 0.08 ){
+            die(p, "ホロウ内での事故");
+            return;
+          }
+          p.rel = clamp(p.rel + 15);
+          say(p, "坑道の奥から、仲間を担いで戻った。", "good big");
+          touchMiasma(p, 8);
         },
       },
     ],
@@ -2471,6 +2806,17 @@
             : "集まりで、ホロウの縁まで連れて行かれた。「慣れることが大事だ」と言われた。",
           "eth"
         );
+        /* いまの時代の儀式では、ミアズマに触れさせられる */
+        if( p.fallAge === null ){
+          say(
+            p,
+            E.spoiler
+              ? "儀式の最後に、赤い汚泥——ミアズマに手を浸すよう言われた。"
+              : "儀式の最後に、赤い泥のようなものに手を浸すよう言われた。",
+            "eth"
+          );
+          touchMiasma(p, 3);
+        }
       },
     },
     /* 讃頌会に通う人が、様子のおかしさに気づいて抜ける。 */
@@ -2549,6 +2895,49 @@
         p.money -= 30;
         p.hap = clamp(p.hap - 3);
         say(p, "避難民の支援をうたう募金にお金を出した。あとで偽物だったと知った。", "bad");
+      },
+    },
+    /*
+    ** 路地裏の医者の抑制剤を使い続けている人。侵蝕は一時的に下がるが、
+    ** 毎年ミアズマに触れる。
+    */
+    {
+      p: p => (p.flags.miaUse ? 1 : 0),
+      fx: p => {
+        p.eth = clamp(p.eth - 3);
+        p.money -= 20;
+        touchMiasma(p, 2);
+      },
+    },
+    /* いまの時代の衛非地区でホロウに潜る人（レイダー・裏稼業）が触れる。 */
+    {
+      p: p => ((p.job === "raider" || p.proxy) && waifeiNow(p) ? 0.15 : 0),
+      fx: p => {
+        say(p, "ラマニアンホロウの奥で、" + miaName() + "の溜まりに足を取られた。", "eth");
+        touchMiasma(p, 3);
+      },
+    },
+    /* ホロウから持ち出された安い品に触れる（いまの時代、まれに）。 */
+    {
+      p: p => (p.age >= 10 && p.fallAge === null ? 0.0015 : 0),
+      fx: p => {
+        say(p, "闇市で、ホロウから持ち出された安い品を買った。触れた指先が赤く染まった。");
+        touchMiasma(p, 2);
+      },
+    },
+    /* 路地裏の医者の運び屋の稼ぎと摘発。 */
+    {
+      p: p => (p.flags.courier ? 0.2 : 0),
+      fx: p => {
+        if( R() < 0.15 ){
+          p.flags.courier = 0;
+          p.money -= 250;
+          p.hap = clamp(p.hap - 8);
+          say(p, "薬を運んでいたところを治安局に捕まった。罰金を払った。", "bad big");
+        }else{
+          p.money += 110;
+          say(p, "路地裏の医者の薬を、患者の家に届けて回った。");
+        }
       },
     },
     /* 孤児は18歳で施設を出て、ひとりで暮らしはじめる。 */
@@ -2680,7 +3069,10 @@
     p.money += Math.round(inc - cost);
     /* 侵蝕 */
     const tol = 1.4 - p.apt / 100;
-    let e = (p.d.exp * 1.2 + j.eth + (p.proxy ? 2.5 : 0)) * tol;
+    /* 触れたミアズマの量（p.mia）だけ、侵蝕が速く進む */
+    let e =
+      (p.d.exp * 1.2 + j.eth + (p.proxy ? 2.5 : 0) + (p.mia || 0) * 0.02) *
+      tol;
     /* 侵蝕の自然な抜けは、通える医療しだい */
     e -= (p.flags.treated ? 0.6 : 0) + 0.3 + 0.6 * p.d.med;
     p.eth = clamp(p.eth + e);
@@ -2765,6 +3157,9 @@
     if( j === "build" ){
       return "現場での事故";
     }
+    if( j === "miner" ){
+      return pick(["採掘場での事故", "エーテリアスの襲撃"]);
+    }
     if( j === "gang" ){
       return "抗争";
     }
@@ -2787,9 +3182,16 @@
     /* 讃頌会に通う人のエーテリアス化は、ネタバレありでは教団の呼び方を足す */
     const cultEnd =
       E.spoiler && p.flags.cult ? "讃頌会の人たちは、それを「進化」と呼んだ。" : "";
+    /* ミアズマに触れてきた人は、最後によみがえった記憶の種類を足す */
+    const miaEnd = !p.mia
+      ? ""
+      : (p.memGood || 0) >= (p.memBad || 0)
+        ? "最後まで、懐かしい夢を見ていた。"
+        : "最後まで、辛い記憶の中にいた。";
     const t =
       cause === "エーテリアス化"
         ? "侵蝕が限界を超えた。治安局の記録に、身元確認済みの一件として残った。" +
+          miaEnd +
           cultEnd
         : cause + "で亡くなった。";
     say(p, t, "bad big");

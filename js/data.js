@@ -168,6 +168,8 @@
       inc: 700, eth: 7, haz: 0.012, hap: 2,
     },
     shop: {name: "商店街の店員", inc: 250, eth: 0, haz: 0, hap: 1},
+    /* 衛非地区（いまの時代）から、ロープウェイでラマニアンホロウに通う */
+    miner: {name: "輝嶺石の採掘場", inc: 360, eth: 3, haz: 0.004, hap: 0},
     gang: {name: "バイクギャングの一員", inc: 180, eth: 2, haz: 0.01, hap: 2},
     owner: {name: "自分の店の店主", inc: 380, eth: 0, haz: 0, hap: 3},
     retired: {name: "引退", inc: 60, eth: 0, haz: 0, hap: 2},

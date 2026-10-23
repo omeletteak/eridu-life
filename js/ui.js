@@ -168,8 +168,10 @@
   function renderPeers(){
     $("peers").innerHTML = peers
       .map(q => {
+        /* ミアズマに長く触れている人は、昔の話ばかりするようになる */
+        const odd = q.alive && (q.mia || 0) >= 10 ? " · 最近、昔の話ばかりしている" : "";
         const now = q.alive
-          ? q.age + "歳 · " + JOBS[q.job].name
+          ? q.age + "歳 · " + JOBS[q.job].name + odd
           : q.age + "歳 " + q.cause;
         return (
           `<div class="peer ${q.alive ? "" : "dead"}">` +
