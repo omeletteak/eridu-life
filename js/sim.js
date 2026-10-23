@@ -28,7 +28,7 @@
   ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
   ** 新しいシーズンを始める。
   */
-  E.VERSION = 3;
+  E.VERSION = 4;
 
   /*
   ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
@@ -377,6 +377,10 @@
       const facility = f.orphan && p.age < 14;
       if( !facility && (f.forceAlone || R() < FAMILY_LOST_RATE) ){
         loseFamily(p);
+      }
+      /* 治安局の局員は総動員。指令で持ち場が決まる */
+      if( p.job === "police" ){
+        return D.fallPolice(p);
       }
       if( p.d.zone !== "inside" ){
         return D.fallFar(p);
@@ -1630,6 +1634,169 @@
         },
       ],
     };
+  };
+
+  /* ===== 治安局の局員の陥落 ===== */
+
+  /* 局員が「旧都に入れ」の指令を受ける割合（残りは新都の側の持ち場） */
+  const POLICE_FRONT = 0.6;
+
+  /*
+  ** 指令に背いた局員 p が、陥落のあとで治安局を去る。商店街で働き
+  ** はじめ、幸福と人間関係が下がる。
+  */
+  function leavePolice(p){
+    p.job = "shop";
+    p.hap = clamp(p.hap - 12);
+    p.rel = clamp(p.rel - 5);
+    say(p, "指令に背いたことが響き、治安局を去った。商店街で働きはじめた。", "bad");
+  }
+
+  /*
+  ** 旧都陥落（治安局の局員）。非番の人も含めて総動員になる。持ち場は
+  ** 住んでいる場所ではなく指令で決まり、旧都に入って避難誘導にあたる
+  ** （前線、POLICE_FRONT）か、新都の側で避難民の受け入れと治安の維持に
+  ** あたる（後方）。選べるのは指令に従うか背くかだけ。背くと、生き
+  ** 延びても治安局を去る（leavePolice）。演出（alarm）は住んでいる場所で
+  ** 決まる。範囲の中に住む人は、生き延びれば移り住む（fallSurvive）。
+  ** 開発用・点検用に p.flags.order（"front" / "rear"）で指令を決められる。
+  */
+  D.fallPolice = p => {
+    const inside = p.d.zone === "inside",
+      tol = 1.4 - p.apt / 100;
+    const front = p.flags.order
+      ? p.flags.order === "front"
+      : R() < POLICE_FRONT;
+    const fam = p.married || p.kids > 0;
+    /* 生き延びたあとの住まい。範囲の中なら移り住み、外なら地元に残る */
+    const after = p => (inside ? fallSurvive(p) : fallWitness(p));
+    const scene = inside
+      ? "かつてない規模のホロウが都市を飲み込もうとしています。"
+      : "エリー都の方角の空に、見たことのない規模のホロウが広がっていきます。";
+    const order = front
+      ? "指令は「エリー都に入り、避難誘導にあたれ」。"
+      : "指令は「新都の側で、避難民の受け入れと治安の維持にあたれ」。";
+    const lost = p.flags.familyLost ? "家族とは連絡がつきません。" : "";
+    const side = front || inside ? armyLine() : yamaLine(p);
+    const base = {
+      title: "旧都陥落",
+      key: "fallPolice",
+      alarm: inside ? "near" : "far",
+      text:
+        scene +
+        "非番の局員も含め、治安局に総動員の招集がかかりました。" +
+        order +
+        lost +
+        side,
+    };
+    /* 背いたときに頼る人がいるか（家族のもとへ向かう文にする） */
+    const toFamily = fam || p.flags.familyLost;
+    const opts = front
+      ? [
+          {
+            id: "fallPolice.front",
+            t: "help",
+            label: "指令に従い、エリー都で避難誘導にあたる",
+            sub: "多くを救えるかもしれない。侵蝕と命の危険",
+            fx: p => {
+              p.eth = clamp(p.eth + 30 * tol);
+              if( R() < 0.3 ){
+                die(p, "旧都陥落");
+              }else{
+                after(p);
+                p.rel = clamp(p.rel + 20);
+                p.hap = clamp(p.hap - 10);
+                say(
+                  p,
+                  "指令どおりエリー都で避難誘導にあたり、最後の避難車両とともに引き上げた。多くの顔を覚えている。",
+                  "big"
+                );
+              }
+            },
+          },
+          {
+            /* 型は ID ごとに一つなので、背き方ごとに ID を分ける */
+            id: toFamily
+              ? "fallPolice.family"
+              : inside
+                ? "fallPolice.leave"
+                : "fallPolice.ignore",
+            t: toFamily ? "search" : inside ? "flee" : "shut",
+            label: toFamily
+              ? "指令に背き、家族のもとへ向かう"
+              : inside
+                ? "指令に背き、避難の列に並ぶ"
+                : "指令に背き、招集に応じない",
+            sub: "生き延びても、治安局にはいられない",
+            fx: p => {
+              if( inside && R() < 0.18 ){
+                die(p, "旧都陥落");
+                return;
+              }
+              after(p);
+              say(
+                p,
+                toFamily
+                  ? "招集を無視して、家族のもとへ急いだ。"
+                  : inside
+                    ? "制服を脱ぎ、避難の列に紛れた。"
+                    : "招集の連絡に応えず、家にとどまった。",
+                "big"
+              );
+              leavePolice(p);
+            },
+          },
+        ]
+      : [
+          {
+            id: "fallPolice.rear",
+            t: "share",
+            label: "指令に従い、避難民を迎える",
+            sub: "人間関係が深まる",
+            fx: p => {
+              if( inside && R() < 0.1 ){
+                die(p, "旧都陥落");
+                return;
+              }
+              after(p);
+              p.rel = clamp(p.rel + 10);
+              say(
+                p,
+                inside
+                  ? "指令どおり、避難民の列を新都の側へ導いた。"
+                  : "指令どおり、押し寄せる避難民の受け入れと治安の維持にあたった。",
+                "big"
+              );
+            },
+          },
+          {
+            id: "fallPolice.enter",
+            t: "search",
+            label:
+              "指令に背き、" +
+              (toFamily ? "家族" : "人") +
+              (inside ? "を探しに残る" : "を探しにエリー都へ行く"),
+            sub: "侵蝕と命の危険。治安局にはいられない",
+            fx: p => {
+              p.eth = clamp(p.eth + 25 * tol);
+              if( R() < 0.25 ){
+                die(p, "旧都陥落");
+                return;
+              }
+              after(p);
+              p.rel = clamp(p.rel + 15);
+              say(
+                p,
+                inside
+                  ? "持ち場を離れて街に残り、はぐれた人を連れ出した。"
+                  : "持ち場を離れてエリー都に入り、はぐれた人を連れ出した。",
+                "big"
+              );
+              leavePolice(p);
+            },
+          },
+        ];
+    return {...base, opts};
   };
 
   /*

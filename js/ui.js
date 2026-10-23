@@ -49,7 +49,8 @@
   ** ?fall=near / ?fall=far で範囲の中か外かを選べる。
   ** &age=45 のように付けると、その年齢で陥落が来る（それまでの年は一気に
   ** 進める）。&alone=1 で家族がすでに消息不明の状況になる。&orphan=1 で
-  ** 孤児として生まれる（施設で暮らす）。
+  ** 孤児として生まれる（施設で暮らす）。&police=1 で陥落の年に治安局の
+  ** 局員になっている（18歳以上のとき）。
   */
   const QS = new URLSearchParams(location.search);
   const DEBUG_FALL = QS.get("fall"),
@@ -849,6 +850,9 @@
           if( d ){
             autoChoose(me, d);
           }
+        }
+        if( QS.has("police") && me.age >= 17 ){
+          me.job = "police";
         }
         if( me.alive && (!want || me.d.zone === want) ){
           break;
