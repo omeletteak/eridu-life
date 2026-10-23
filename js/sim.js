@@ -28,7 +28,7 @@
   ** なる。版が違うと同じ道でも結果が変わるので、lab では版が変わったら
   ** 新しいシーズンを始める。
   */
-  E.VERSION = 4;
+  E.VERSION = 5;
 
   /*
   ** 文字列 key から、0 以上 1 未満を返す乱数の関数を作って返す。
@@ -357,7 +357,7 @@
   **   alarm  旧都陥落のときだけ。範囲の中は "near"、外は "far"
   **
   ** 同じ決断は一生に一度だけ出す（p.flags に印をつける）。優先順は
-  ** 旧都陥落 → ホロウ災害 → 侵蝕の症状 → 讃頌会の誘い →
+  ** 旧都陥落 → ホロウ災害 → 侵蝕の症状 → 讃頌会の誘い → 分かれ道 →
   ** 節目（15/18/24/29/42/62歳）。
   */
   function decisionFor(p){
@@ -399,6 +399,17 @@
     if( p.age >= 16 && !f.cultAsked && cultReason(p) && R() < CULT_RATE ){
       f.cultAsked = 1;
       return D.cult(p);
+    }
+    /*
+    ** 分かれ道：悪の側にいれば抜ける機会、善の側にいれば誘いが、
+    ** たまに来る（前の分かれ道から CROSS_GAP 年あければ何度でも）
+    */
+    if( p.age >= 20 && p.age < 65 && p.age - (f.crossAt || 0) >= CROSS_GAP ){
+      const way = crossWay(p);
+      if( way && R() < crossRate(p, way) ){
+        f.crossAt = p.age;
+        return D.cross(p, way);
+      }
     }
     /* 節目の決断は、陥落や災害と同じ年に重なったら翌年以降に持ち越す */
     if( p.age >= 15 && !f.d15 ){
@@ -1360,6 +1371,179 @@
           },
         },
       ],
+    };
+  };
+
+  /* ===== 分かれ道（悪から善へ、善から悪へ） ===== */
+
+  /* 分かれ道と分かれ道のあいだに、少なくともあける年数 */
+  const CROSS_GAP = 5;
+
+  /*
+  ** p がいま立てる分かれ道の種類を返す。なければ null。
+  ** 悪の側にいれば抜ける道（"cult" / "proxy" / "gang" / "raider"。この順に
+  ** 優先）、善の側にいれば誘い（"regang" 昔のギャング仲間 / "dive"
+  ** 借金を返すための無許可の潜行 / "side" 裏稼業）。引退した人には来ない。
+  */
+  function crossWay(p){
+    const f = p.flags;
+    if( p.job === "retired" || p.job === "student" ){
+      return null;
+    }
+    if( f.cult ){
+      return "cult";
+    }
+    if( p.proxy ){
+      return "proxy";
+    }
+    if( p.job === "gang" ){
+      return "gang";
+    }
+    if( p.job === "raider" ){
+      return "raider";
+    }
+    if( f.wild ){
+      return "regang";
+    }
+    if( p.money < 0 ){
+      return "dive";
+    }
+    return "side";
+  }
+
+  /* 分かれ道の種類 way が、その年に p に来る確率を返す。 */
+  function crossRate(p, way){
+    if( ["cult", "proxy", "gang", "raider"].includes(way) ){
+      return 0.08;
+    }
+    return p.money < 0 ? 0.04 : 0.02;
+  }
+
+  /*
+  ** 分かれ道の決断。way は crossWay の返す種類。悪の側の人には抜ける道
+  ** （cross.reform / cross.stay）、善の側の人には誘い（cross.fall /
+  ** cross.refuse）を出す。抜けるときは、過去を知った上で受け入れて
+  ** くれる人がいる。抜けた回数は p.flags.reformed に数える。
+  */
+  D.cross = (p, way) => {
+    const title = p.age + "歳 · 分かれ道";
+    const again = p.flags.reformed ? "もう一度、" : "";
+    /* 抜けたときの共通の変化 */
+    const fresh = p => {
+      p.flags.reformed = (p.flags.reformed || 0) + 1;
+      p.hap = clamp(p.hap + 5);
+      p.rel = clamp(p.rel + 8);
+      p.money -= 50;
+    };
+    const stay = {
+      id: "cross.stay",
+      t: "keep",
+      label: "今のままでいる",
+      sub: "変化なし",
+      fx: p => say(p, "差し伸べられた手を取らなかった。"),
+    };
+    const refuse = {
+      id: "cross.refuse",
+      t: "stable",
+      label: "断る",
+      sub: "今の暮らしを守る",
+      fx: p => say(p, "誘いを断った。"),
+    };
+    const cultName = E.spoiler ? "讃頌会" : "集まり";
+    const s = {
+      cult: {
+        text: cultName + "で知り合った人が、こっそり抜け出す手助けをすると言ってくれました。",
+        label: "手を借りて抜ける",
+        sub: "居場所は失う。侵蝕は止まる",
+        fx: p => {
+          p.flags.cult = 0;
+          p.flags.cultLeft = 1;
+          say(p, "夜明け前に" + cultName + "を抜け出した。迎えてくれる人がいた。", "good big");
+        },
+      },
+      proxy: {
+        text: "裏稼業の依頼が続くなか、昔なじみから「そろそろ足を洗ったらどうだ」と言われました。",
+        label: "裏稼業から足を洗う",
+        sub: "副収入は消える。危険も減る",
+        fx: p => {
+          p.proxy = false;
+          say(p, again + "裏稼業から足を洗った。", "good big");
+        },
+      },
+      gang: {
+        text: "商店街の店主が、ギャングだと知った上で「うちで働かないか」と声をかけてくれました。",
+        label: "店で働かせてもらう",
+        sub: "収入は減る。危険は減る",
+        fx: p => {
+          p.job = "shop";
+          say(
+            p,
+            again + "ギャングを抜けて、商店街で働きはじめた。過去は消えないが、受け入れてくれる人がいた。",
+            "good big"
+          );
+        },
+      },
+      raider: {
+        text: "ホロウ調査企業から、無許可で潜っていた経験を買いたいという話が来ました。過去は問わないといいます。",
+        label: "正規の仕事に移る",
+        sub: p.know >= 40 ? "企業の調査員になれそう" : "知識が足りず、現場の仕事から",
+        fx: p => {
+          p.job = p.know >= 40 ? "corp" : "build";
+          say(
+            p,
+            p.job === "corp"
+              ? "無許可の潜行をやめ、ホロウ調査企業に雇われた。"
+              : "無許可の潜行をやめ、現場の仕事に就いた。",
+            "good big"
+          );
+        },
+      },
+      regang: {
+        text: "昔の走り屋の仲間が訪ねてきて、「戻ってこい」と言いました。",
+        label: "仲間のもとへ戻る",
+        sub: "居場所はある。危険も多い",
+        fx: p => {
+          p.job = "gang";
+          say(p, "仲間のもとへ戻り、また郊外の荒野を走りはじめた。", "big");
+        },
+      },
+      dive: {
+        text: "借金がかさむなか、無許可でホロウに潜れば一度で返せると持ちかけられました。",
+        label: "ホロウに潜る",
+        sub: "高収入。侵蝕と死の危険",
+        fx: p => {
+          p.job = "raider";
+          say(p, "借金を返すため、無許可でホロウに潜りはじめた。", "eth big");
+        },
+      },
+      side: {
+        text: "顔見知りから、ホロウ内の道案内の裏稼業を手伝わないかと持ちかけられました。",
+        label: "引き受ける",
+        sub: "副収入。侵蝕と治安局の目",
+        fx: p => {
+          p.proxy = true;
+          say(p, "裏でホロウの案内を請け負うようになった。", "eth big");
+        },
+      },
+    }[way];
+    const good = ["cult", "proxy", "gang", "raider"].includes(way);
+    const move = {
+      id: good ? "cross.reform" : "cross.fall",
+      t: good ? "change" : "stray",
+      label: s.label,
+      sub: s.sub,
+      fx: p => {
+        if( good ){
+          fresh(p);
+        }
+        s.fx(p);
+      },
+    };
+    return {
+      title,
+      key: "cross",
+      text: s.text,
+      opts: good ? [move, stay] : [move, refuse],
     };
   };
 
