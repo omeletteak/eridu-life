@@ -435,6 +435,15 @@
       })
       .join("");
     const dots = crowd.map((c, i) => `<i data-i="${i}"></i>`).join("");
+    /*
+    ** ネタバレありでは、陥落でどこが飲まれ、どう止まったかと、元凶と
+    ** された人の報道を足す（公式の人物の名前は出さない）。
+    */
+    const truth = window.Eridu.spoiler
+      ? `<p class="muted crowd-legend">飲まれたのは、ミネルヴァ区とプルートー区の広い範囲だった。` +
+        `南西から北東へ14基の式輿の塔を爆破してできた大地溝が、ホロウの広がりをようやく止めた。` +
+        `のちに、陥落の元凶としてある人物の名前が報じられた。真相はまだ分かっていない。</p>`
+      : "";
     const next = withButton
       ? `<div class="row" style="margin-top:12px">` +
         `<button class="btn" id="reportNext" hidden>先へ進む</button></div>`
@@ -445,6 +454,7 @@
     <div class="crowd-head"><span class="eyebrow">あの日、旧都にいた100人</span><span class="crowd-count" id="crowdCount">集計中…</span></div>
     <div class="crowd" id="crowd">${dots}</div>
     <p class="muted crowd-legend"><span class="dot ok"></span>新エリー都に着いた　<span class="dot lost"></span>消息不明</p>
+    ${truth}
     ${next}
   </div>`;
     const first = quick ? 0 : 900,
