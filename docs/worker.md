@@ -100,7 +100,7 @@ node ../tools/api.js -n 300
 
 ## デプロイ
 ダッシュボードの Git 連携で、main が更新されるとデプロイされる。ビルドの設定の
-ルートディレクトリは `worker`（リポジトリのいちばん上には設定ファイルがないので、
+ルートディレクトリは、「Production」と「Previews Base」の両方のタブで `worker`（リポジトリのいちばん上には設定ファイルがないので、
 そのままだと Cloudflare が自分で作った設定でデプロイしてしまう）。`wrangler.toml`
 の `name` はダッシュボードの Worker の名前（`eridu-life`）と同じにしておく。
 
