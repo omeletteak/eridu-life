@@ -5,7 +5,7 @@ lab の「世界と道」（`docs/world.md`）を複数人で遊べるように�
 GitHub issue #21。本編は今までどおり GitHub Pages で配信し、この Worker とは
 つながっていない。lab をつなぐのはこれから（今の lab は端末の中の表だけを使う）。
 
-URL：https://eridu-life.omeletteanko.workers.dev
+URL：https://eridu-life.omeletteak.workers.dev
 
 ## ファイル
 | ファイル | 役目 |
