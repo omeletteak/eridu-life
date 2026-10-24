@@ -45,4 +45,5 @@
 - `Eridu.hooks`：born / said / pick / year。既定は空で、本編の動きは変えない
 - 選択肢を当てるときは画面からもランダムでも `apply(p, dec, o)` を通す（`o.fx` を直接呼ばない。tools/choices.js は例外）
 - `Eridu.meSource(era, place)` / `Eridu.peerSource(me)`（ui.js が見る）：あれば、本人と同じ1秒の人を先にそこからもらう
-  （開発用の `?fall` では使わない）。本編ではどれも置かない
+  （開発用の `?fall` では使わない）。本編ではどれも置かない。Promise を返してもよく（lab がサーバーに聞くとき）、
+  ui.js は待つ（待つ間は「生まれる」を押せない）

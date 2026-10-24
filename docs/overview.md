@@ -7,6 +7,8 @@
 - 試作版（HTML/CSS/JS、ライブラリなし）。チャットで作ったもの。ライブラリは lab/ の sql.js だけ（例外）
 - main は安定して配信できるもの。`lab/` は実験場で、本編に混ぜない（本編は lab の仕組みを使わない）
 - `eridu-life.html` をブラウザで直接開けば動く（file:// で動かすため ES modules は使わない）
+- Cloudflare Worker からも配っている：https://eridu-life.omeletteak.workers.dev/（lab はこちらで開くと
+  みんなで1つの世界になる。`docs/worker.md`）
 - GitHub Pages で公開している：https://omeletteak.github.io/eridu-life/（main のルートから配信。
   `index.html` は `eridu-life.html` へ飛ばすだけ、`.nojekyll` で Jekyll を通さない）
 - やることは GitHub の issue に置く
