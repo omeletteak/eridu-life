@@ -5,6 +5,13 @@ name = "eridu-life"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
+# リポジトリのいちばん上を静的アセットとして配る（本編は /、lab は /lab/）。
+# 配らないものはリポジトリの上の .assetsignore、応答のヘッダー（CSP）は
+# _headers に書く。/api/ と /hello だけは先に Worker が受ける。
+[assets]
+directory = "../"
+run_worker_first = ["/api/*", "/hello"]
+
 # D1 のデータベース。Worker の中では env.DB で使う。
 # database_id はダッシュボードの D1 の画面に出る Database ID。
 [[d1_databases]]
