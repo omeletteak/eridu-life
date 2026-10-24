@@ -2,10 +2,15 @@
 
 lab の「世界と道」（`docs/world.md`）を複数人で遊べるようにするため、
 みんなの道を Cloudflare の D1（中身は SQLite）に集める Worker。方針と段取りは
-GitHub issue #21。本編は今までどおり GitHub Pages で配信し、この Worker とは
-つながっていない。lab をつなぐのはこれから（今の lab は端末の中の表だけを使う）。
+GitHub issue #21。リポジトリのいちばん上も静的アセットとして配るので、
+Worker の URL でも本編（`/`）と lab（`/lab/`）が遊べる。Worker から開いた lab
+だけが API につながり、みんなで1つの世界になる。GitHub Pages の本編と lab は
+今までどおり（lab は端末の中の表だけを使う）。
 
-URL：https://eridu-life.omeletteak.workers.dev
+- Worker：https://eridu-life.omeletteak.workers.dev/lab/
+- 配らないもの（docs・tools・worker・*.md など）は `.assetsignore`、応答の
+  ヘッダー（CSP など）は `_headers`。どちらもリポジトリのいちばん上
+- 開発用：`/lab/?local` で、Worker から開いても端末の表だけで遊ぶ
 
 ## ファイル
 | ファイル | 役目 |
@@ -67,8 +72,9 @@ D1 の無料の枠は、書き込みが1日10万行（索引の更新も数え�
 その索引で、一生あたり12行ほど）。
 
 ## まだしないこと（issue #21 の続き）
-- lab をこの API につなぐ（lab を Worker からも配って、同じ URL で動かす。CORS を
-  付けるなら https://omeletteak.github.io だけ。ほかの人の道や名前は textContent で出す）
+- GitHub Pages の lab をつなぐ（CORS を付けるなら https://omeletteak.github.io
+  だけ）。サーバーから文字列を受け取って画面に出すときは esc か textContent
+  （今はサーバーからは番号と選択肢の ID しか受け取らない）
 - プレイヤーの本人確認（今は端末の乱数の id だけ）
 
 ## D1 の用意（ダッシュボードで1回だけ）

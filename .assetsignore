@@ -1,0 +1,9 @@
+# Worker の静的アセットに入れないもの（worker/wrangler.toml の [assets]）。gitignore と同じ書き方
+.git
+.gitignore
+.nojekyll
+.assetsignore
+*.md
+docs
+tools
+worker
