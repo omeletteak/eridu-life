@@ -222,6 +222,8 @@ CREATE TABLE log(
   ** 亡くなった本人 p の歩きかけの記録を表に書く（games・people・
   ** options・picks・log）。同じ番号を前に誰かがまったく同じ道で歩いて
   ** いなければ、p.mark を true にする（その道に名前が付いた印）。
+  ** E.onCommit があれば（fate.js がサーバーにつないでいるとき）、
+  ** p と道（選択肢の ID の配列）を渡す（サーバーに送り、印を決め直す）。
   */
   function commit(p){
     const w = walks.get(p);
@@ -233,6 +235,9 @@ CREATE TABLE log(
       [w.season, w.era, w.no, path]
     );
     p.mark = !seen;
+    if( E.onCommit ){
+      E.onCommit(p, w.picks.map(x => x.o.id));
+    }
     run("INSERT INTO games(season, player, version, era, no, born_at) " +
       "VALUES(?, ?, ?, ?, ?, ?)", [
       w.season, player, E.VERSION, w.era, w.no, w.bornAt,
