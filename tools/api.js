@@ -6,7 +6,7 @@
 **
 ** 使い方（docs/worker.md）:
 **   cd worker && npx wrangler d1 execute DB --local --file schema.sql
-**   cd worker && npx wrangler dev
+**   cd worker && npx wrangler dev --var MIN_PICK_MS:0
 **   node tools/api.js [-n 人数] [URL]     URL の既定は http://localhost:8787
 **
 ** 調べること:
@@ -15,6 +15,8 @@
 **   - 同じ1秒の4人は同じ組の番号で、歩かれていれば、空でない道のうち
 **     いちばん早く歩きはじめた人の道が返る
 **   - 同じ番号を同じ道で歩いた2人目には ✦ の印（mark）が付かない
+**   - 道をたどり直した年齢と死因が、手元で歩いた一生と同じ。ありえない道
+**     （本当の道の後ろに選択を足したもの）を断る
 **   - 形の合わない要求（版・道・プレイヤー・二重の送信・大きすぎる本文）を断る
 **   - ほかの人の一回の同じ1秒には答えない
 **   - IP ごとの遊びかけの予約の上限と、1分の回数の制限が効く
@@ -37,13 +39,34 @@ for(let i = 0; i < args.length; i++){
   }
 }
 
-/* 試しに歩かせる道の候補（決まった選択肢の ID） */
-const PATHS = [
-  [],
-  ["school.study"],
-  ["school.study", "work.corp"],
-  ["school.wild", "work.gang", "proxy.accept"],
-];
+/*
+** 番号の答え b（born の応答）の本人を作り、プレイヤーの代わりに
+** ランダムに選びながら最期まで歩かせる。本人の作り方は lab/fate.js の
+** resident と同じ。route（選択肢の ID の配列）があれば、そのとおりに選ぶ。
+** {path, age, cause} を返す。
+*/
+function walkLocal(b, route){
+  const key = no => `s${b.season}|v${b.version}|${b.era}|${no}`;
+  const p = E.newPerson(b.era, false, null, key(b.no));
+  if( b.era === "old" ){
+    const start = 100000 + Math.floor((b.no - 100000) / 5) * 5;
+    p.fallAge = E.fallAgeFrom(E.fateRng(key("block" + start))());
+  }
+  const path = [];
+  let guard = 0;
+  while( p.alive && guard++ < 130 ){
+    E.step(p);
+    const d = E.decisionFor(p);
+    if( d ){
+      const o = route
+        ? d.opts.find(x => x.id === route[path.length])
+        : pick(d.opts);
+      E.apply(p, d, o);
+      path.push(o.id);
+    }
+  }
+  return {path, age: p.age, cause: p.cause};
+}
 
 /* 見つけた問題の一覧 */
 const bad = [];
@@ -99,6 +122,8 @@ async function lives(){
   ** 前の回の行もあるので、初めは peers の答えから知る
   */
   const known = new Map();
+  /* 番号ごとの、この回で歩いた道の一覧 */
+  const walks = new Map();
   for(let i = 0; i < count; i++){
     ip = RUN + "-" + i;
     const era = pick(["now", "old"]);
@@ -130,11 +155,21 @@ async function lives(){
     if( Math.random() < 0.3 ){
       continue;
     }
-    const path = pick(PATHS);
-    const d = await call("/api/died", {
-      player, game: b.game, path, age: 40, cause: "テスト",
-    });
+    /* 歩かれた番号なら、半分は前の人と同じ道を歩く（✦ が付かないはず） */
+    const before = walks.get(key);
+    const w = walkLocal(b, before && Math.random() < 0.5 ? pick(before) : null);
+    const path = w.path;
+    walks.set(key, (before || []).concat([path]));
+    if( path.length && Math.random() < 0.1 ){
+      const fake = await call("/api/died", {
+        player, game: b.game, path: path.concat(["school.study"]),
+      });
+      expect(fake.status === 400, `ありえない道を受けた：${fake.status}`);
+    }
+    const d = await call("/api/died", {player, game: b.game, path});
     expect(d.status === 200, `died ${d.status} ${JSON.stringify(d.body)}`);
+    expect(d.body.age === w.age && d.body.cause === w.cause,
+      `たどり直しが違う：${JSON.stringify(d.body)} / ${w.age} ${w.cause}`);
     expect(!routes.has(key + "|" + path) || d.body.mark === false,
       `同じ道の2人目に印が付いた：${key}`);
     routes.add(key + "|" + path);
@@ -143,9 +178,7 @@ async function lives(){
     if( known.get(key) === null && path.length ){
       known.set(key, path);
     }
-    const again = await call("/api/died", {
-      player, game: b.game, path, age: 40, cause: "テスト",
-    });
+    const again = await call("/api/died", {player, game: b.game, path});
     expect(again.status === 409, `二重の送信を受けた：${again.status}`);
   }
 }
@@ -163,11 +196,11 @@ async function refusals(){
   r = await call("/api/born", {player, era: "now", version: E.VERSION});
   const game = r.body.game;
   r = await call("/api/died", {
-    player, game, path: ["x'; DROP TABLE people; --"], age: 1, cause: "a",
+    player, game, path: ["x'; DROP TABLE people; --"],
   });
   expect(r.status === 400, "形の合わない道を受けた");
   r = await call("/api/died", {
-    player: "someone-else", game, path: [], age: 1, cause: "a",
+    player: "someone-else", game, path: [],
   });
   expect(r.status === 404, "ほかの人の一回を受けた");
   r = await call(`/api/peers?game=${game}&player=someone-else`);

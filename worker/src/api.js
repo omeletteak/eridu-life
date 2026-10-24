@@ -8,7 +8,8 @@
 ** lab/fate.js と同じ決まりで、それをサーバーの1か所でやる。
 **
 ** SQL はここで組み、値はいつもプレースホルダで渡す。端末から SQL は
-** 受け取らない。受け取った道は今は形だけを確かめる（たどり直しはまだ）。
+** 受け取らない。受け取った道は sim.js でたどり直して確かめ、年齢や死因は
+** 端末から受け取らずに、たどり直した結果を書く。
 **
 ** いたずらへの備え：born と died は、IP ごとに1分の回数を絞る（wrangler.toml
 ** の LIMITER）。IP ごとの遊びかけの予約も MAX_HELD までにする。空いた番号を
@@ -58,8 +59,6 @@ const OPTION_ID = /^[A-Za-z]+\.[A-Za-z]+$/;
 const PLAYER_ID = /^[A-Za-z0-9-]{8,64}$/;
 /* 時代の一覧 */
 const ERAS = ["now", "old"];
-/* 死因の文字数の上限 */
-const MAX_CAUSE = 40;
 
 /* 今の時刻（ミリ秒 ms）を ISO の文字列で返す。ms がなければ今。 */
 const iso = ms => new Date(ms === undefined ? Date.now() : ms).toISOString();
@@ -420,22 +419,98 @@ async function born(request, env, ip){
   });
 }
 
-/*
-** 道 path が、選択肢の ID の配列として形が合っているかを返す
-** （中身が本当にありうる道かは、まだ確かめない）。
-*/
+/* 道 path が、選択肢の ID の配列として形が合っているかを返す。 */
 const goodPath = path =>
   Array.isArray(path) && path.length <= MAX_PICKS &&
   path.every(id => typeof id === "string" && OPTION_ID.test(id));
 
+/* 真偽を 0 / 1 にして返す。 */
+const b01 = v => (v ? 1 : 0);
+
 /*
-** POST /api/died：本文 {player, game, path, age, cause} を受け取り、
-** 歩き終えた一回を people に1行書く。game は born が返した番号で、
-** 同じ player のものでなければならない。同じ番号をまったく同じ道で
-** 歩いた人がまだいなければ mark を true にして {mark} を返す
-** （その道に名前が付いた印。docs/world.md）。印と歩かれた番号の数は、
-** routes と walked に INSERT OR IGNORE して、入ったかどうかで決める
-** （同時に送られても、1人にしか付かず、1回しか数えない）。
+** people の欄のうち、たどり直した人 p から書くものと、その値を取り出す
+** 関数の組（lab/db.js の COLS と同じ）。
+*/
+const COLS = [
+  ["name", p => p.name],
+  ["sex", p => p.sex],
+  ["thiren", p => b01(p.thiren)],
+  ["kind", p => p.kind],
+  ["apt", p => p.apt],
+  ["birth_d", p => p.birthD.id],
+  ["d", p => p.d.id],
+  ["age", p => p.age],
+  ["alive", p => b01(p.alive)],
+  ["cause", p => p.cause],
+  ["hp", p => p.hp],
+  ["hap", p => p.hap],
+  ["know", p => p.know],
+  ["rel", p => p.rel],
+  ["eth", p => p.eth],
+  ["money", p => p.money],
+  ["job", p => p.job],
+  ["proxy", p => b01(p.proxy)],
+  ["married", p => b01(p.married)],
+  ["kids", p => p.kids],
+  ["fall_age", p => p.fallAge],
+  ["family_lost", p => b01(p.flags.familyLost)],
+  ["reunited", p => b01(p.flags.reunited)],
+  ["survivor", p => b01(p.flags.survivor)],
+  ["witness", p => b01(p.flags.witness)],
+  ["lost_shop", p => b01(p.flags.lostShop)],
+];
+/* COLS を書く people の INSERT 文 */
+const INSERT_PERSON =
+  "INSERT INTO people(game, season, era, no, path, fall_survived, died_at, " +
+  COLS.map(c => c[0]).join(", ") + ") VALUES(?, ?, ?, ?, ?, ?, ?, " +
+  COLS.map(() => "?").join(", ") + ")";
+
+/*
+** 一回 g（games の行に seasons の no_min を足したもの）の本人を、道 path
+** （選択肢の ID の配列）のとおりに sim.js で最期までたどり直す。
+** 本人の作り方は lab/fate.js の resident と同じ。道のとおりに選べなかった、
+** 道より多く決断が来た、最期まで行かなかったときは null を返す。
+** たどれたら {p, fallSurvived}（陥落の決断のあと生きていたか。なければ
+** null）を返す。端末と細かい数が違っても、選択・年齢・死因は同じになる
+** （#11）ので、表にはこちらの結果を書く。
+*/
+function relive(g, path){
+  const s = {id: g.season, version: g.version, no_min: g.no_min};
+  const p = E.newPerson(g.era, false, null, fateKey(s, g.era, g.no));
+  if( g.era === "old" ){
+    const key = fateKey(s, g.era, "block" + blockStart(s, g.no));
+    p.fallAge = E.fallAgeFrom(E.fateRng(key)());
+  }
+  p.route = path.slice();
+  p.routeAt = 0;
+  const seen = [];
+  let fallSurvived = null;
+  E.runToEnd(p, 130, (q, d, o) => {
+    seen.push(o.id);
+    if( d.alarm ){
+      fallSurvived = b01(q.alive);
+    }
+  });
+  if( p.offRoute || p.alive || seen.join(",") !== path.join(",") ){
+    return null;
+  }
+  return {p, fallSurvived};
+}
+
+/*
+** POST /api/died：本文 {player, game, path} を受け取り、歩き終えた一回を
+** people に1行書く。game は born が返した番号で、同じ player のもので
+** なければならない。道は sim.js でたどり直し、ありえない道なら 400。
+** 年齢・死因などは端末から受け取らず、たどり直した結果を書く。
+** 生まれてから、決断1回につき MIN_PICK_MS より早く送ってきたら 400
+** （人の手では選べない速さ）。版が変わったあとの一回はたどり直せない
+** ので 409。
+**
+** 同じ番号をまったく同じ道で歩いた人がまだいなければ mark を true に
+** して {mark, age, cause} を返す（その道に名前が付いた印。docs/world.md）。
+** 印と歩かれた番号の数は、routes と walked に INSERT OR IGNORE して、
+** 入ったかどうかで決める（同時に送られても、1人にしか付かず、1回しか
+** 数えない）。
 */
 async function died(request, env){
   const q = await body(request);
@@ -448,12 +523,6 @@ async function died(request, env){
   if( !goodPath(q.path) ){
     return fail("path");
   }
-  if( !Number.isInteger(q.age) || q.age < 0 || q.age > 150 ){
-    return fail("age");
-  }
-  if( typeof q.cause !== "string" || q.cause.length > MAX_CAUSE ){
-    return fail("cause");
-  }
   const db = env.DB;
   const g = await db.prepare(
     "SELECT g.*, s.no_min FROM games g JOIN seasons s ON s.id = g.season " +
@@ -462,14 +531,25 @@ async function died(request, env){
   if( !g || g.player !== q.player ){
     return fail("game", 404);
   }
+  if( g.version !== E.VERSION ){
+    return json({error: "version", version: E.VERSION}, 409);
+  }
+  const minMs = env.MIN_PICK_MS === undefined ? 1000 : +env.MIN_PICK_MS;
+  if( Date.now() - Date.parse(g.born_at) < minMs * q.path.length ){
+    return fail("fast");
+  }
+  const r = relive(g, q.path);
+  if( !r ){
+    return fail("route");
+  }
   const path = q.path.join(",");
   let got;
   try{
     got = await db.batch([
-      db.prepare(
-        "INSERT INTO people(game, season, era, no, path, age, alive, " +
-          "cause, died_at) VALUES(?, ?, ?, ?, ?, ?, 0, ?, ?)"
-      ).bind(g.id, g.season, g.era, g.no, path, q.age, q.cause, iso()),
+      db.prepare(INSERT_PERSON).bind(
+        g.id, g.season, g.era, g.no, path, r.fallSurvived, iso(),
+        ...COLS.map(c => c[1](r.p))
+      ),
       db.prepare(
         "INSERT OR IGNORE INTO walked(season, era, no) VALUES(?, ?, ?)"
       ).bind(g.season, g.era, g.no),
@@ -489,7 +569,9 @@ async function died(request, env){
         "ON CONFLICT(season, era, place) DO UPDATE SET walked = walked + 1"
     ).bind(g.season, g.era, g.no_min).run();
   }
-  return json({mark: got[2].meta.changes > 0});
+  return json({
+    mark: got[2].meta.changes > 0, age: r.p.age, cause: r.p.cause,
+  });
 }
 
 /*
