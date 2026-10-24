@@ -11,3 +11,8 @@ compatibility_date = "2026-10-01"
 binding = "DB"
 database_name = "eridu-life"
 database_id = "0bc438b1-e612-45f0-a337-47ba870d024c"
+
+# PR ごとのプレビュー（Git 連携が wrangler preview で作る）の設定。
+# D1 などのつなぎはここに書かないと引き継がれないので、プレビューには
+# DB がない（API は 503 を返し、本番の表には書かない）。
+[previews]

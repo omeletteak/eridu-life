@@ -82,3 +82,7 @@ node ../tools/api.js -n 300
 ## デプロイ
 ダッシュボードの Git 連携で、main が更新されるとデプロイされる。`wrangler.toml`
 の `name` はダッシュボードの Worker の名前（`eridu-life`）と同じにしておく。
+
+PR を出すと、Git 連携が `wrangler preview` でプレビューを作る。そのため
+`wrangler.toml` に空の `[previews]` を置いている。D1 のつなぎはプレビューに
+引き継がれないので、プレビューの `/api/…` は 503 を返す（本番の表には書かない）。
