@@ -1,5 +1,13 @@
-# 試作の最小の Worker の設定（docs/worker.md）。
-# デプロイすると https://eridu-life-hello.<アカウントのサブドメイン>.workers.dev に出る。
-name = "eridu-life-hello"
+# lab の道を共有する Worker の設定（docs/worker.md）。
+# ダッシュボードの Git 連携で、main が更新されるとデプロイされる。
+# name はダッシュボードの Worker の名前と同じにする。
+name = "eridu-life"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
+
+# D1 のデータベース。Worker の中では env.DB で使う。
+# database_id はダッシュボードの D1 の画面に出る Database ID。
+[[d1_databases]]
+binding = "DB"
+database_name = "eridu-life"
+database_id = "0bc438b1-e612-45f0-a337-47ba870d024c"
