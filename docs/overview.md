@@ -26,7 +26,9 @@
 | `tools/choices.js` | 選択肢の総点検。決断や選択肢を足したら、ここの SCENES にも場面を足す |
 | `tools/fate.js` | 運命の点検と、版の上げ忘れの点検（答えは `tools/fate-golden.json`） |
 | `tools/style.js` | 書き方の点検 |
+| `tools/api.js` | 道の共有の API の点検（手元の Worker に向ける。`docs/worker.md`） |
 | `lab/` | 試験版。人の記録を SQLite に置き、世界と道の仕組みを試す（`docs/world.md`・`docs/schema.md`） |
+| `worker/` | lab の道を共有する Cloudflare Worker と D1 の表（`docs/worker.md`） |
 
 - data.js と sim.js は `globalThis.Eridu` に載せる形。ブラウザでは script タグ、Node では `require` で読む
 - `lab/index.html` は `eridu-life.html` の写し（パスを `../` に、lab の script と注記を足したもの）。
