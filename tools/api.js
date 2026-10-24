@@ -15,7 +15,9 @@
 **   - 同じ1秒の4人は同じ組の番号で、歩かれていれば、空でない道のうち
 **     いちばん早く歩きはじめた人の道が返る
 **   - 同じ番号を同じ道で歩いた2人目には ✦ の印（mark）が付かない
-**   - 形の合わない要求（版・道・プレイヤー・二重の送信）を断る
+**   - 形の合わない要求（版・道・プレイヤー・二重の送信・大きすぎる本文）を断る
+**   - ほかの人の一回の同じ1秒には答えない
+**   - IP ごとの遊びかけの予約の上限と、1分の回数の制限が効く
 **
 ** 問題があれば1行ずつ出し、終了コードを 1 にする。
 */
@@ -57,13 +59,21 @@ function expect(ok, what){
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
 /*
+** 要求に付ける送り元の IP（CF-Connecting-IP）。本番では Cloudflare が
+** 付けるが、手元では付けたものが届くので、回数の制限を人ごとに分けて試す
+*/
+const RUN = "t" + Date.now();
+let ip = RUN;
+
+/*
 ** API の path に、本文 obj があれば POST で、なければ GET で送り、
-** {status, body}（body は JSON を読んだもの）を返す。
+** {status, body}（body は JSON を読んだもの）を返す。送り元は ip。
 */
 async function call(path, obj){
+  const headers = {"CF-Connecting-IP": ip};
   const opt = obj === undefined
-    ? {}
-    : {method: "POST", body: JSON.stringify(obj)};
+    ? {headers}
+    : {method: "POST", headers, body: JSON.stringify(obj)};
   const r = await fetch(base + path, opt);
   return {status: r.status, body: await r.json()};
 }
@@ -90,6 +100,7 @@ async function lives(){
   */
   const known = new Map();
   for(let i = 0; i < count; i++){
+    ip = RUN + "-" + i;
     const era = pick(["now", "old"]);
     const ds = E.DISTRICTS.filter(d => (era === "old" ? d.old : d.w) > 0);
     const place = Math.random() < 0.5 ? pick(ds).id : "";
@@ -101,7 +112,7 @@ async function lives(){
     expect(!place || birthOf(b) === place, `${b.no} が ${place} に生まれない`);
     expect(!live.has(key) || done.has(key) || b.reborn, `遊びかけの ${key} を重ねて配った`);
     live.set(key, b);
-    const p = await call("/api/peers?game=" + b.game);
+    const p = await call(`/api/peers?game=${b.game}&player=${player}`);
     expect(p.body.peers.length === 4, `同じ1秒が4人でない：${b.no}`);
     for(const q of p.body.peers){
       const k = b.season + "|" + b.era + "|" + q.no;
@@ -148,6 +159,7 @@ async function refusals(){
   expect(r.status === 400, "知らない時代を受けた");
   r = await call("/api/born", {player: "a'", era: "now", version: E.VERSION});
   expect(r.status === 400, "形の合わないプレイヤーを受けた");
+  ip = RUN + "-held";
   r = await call("/api/born", {player, era: "now", version: E.VERSION});
   const game = r.body.game;
   r = await call("/api/died", {
@@ -158,6 +170,26 @@ async function refusals(){
     player: "someone-else", game, path: [], age: 1, cause: "a",
   });
   expect(r.status === 404, "ほかの人の一回を受けた");
+  r = await call(`/api/peers?game=${game}&player=someone-else`);
+  expect(r.status === 404, "ほかの人の一回の同じ1秒を答えた");
+  r = await call("/api/born", {player, pad: "x".repeat(20000)});
+  expect(r.status === 413, `大きすぎる本文に 413 を返さない：${r.status}`);
+  /* 同じ IP で遊びかけを溜めると断る（さっきの1つを入れて MAX_HELD = 5） */
+  const codes = [];
+  for(let i = 0; i < 5; i++){
+    codes.push((await call("/api/born", {
+      player, era: "now", version: E.VERSION,
+    })).status);
+  }
+  expect(String(codes) === "200,200,200,200,429",
+    `遊びかけの上限が効かない：${codes}`);
+  /* 同じ IP から1分に 10 回を超えると断る */
+  ip = RUN + "-fast";
+  codes.length = 0;
+  for(let i = 0; i < 11; i++){
+    codes.push((await call("/api/died", {player, game: 0})).status);
+  }
+  expect(codes[10] === 429, `回数の制限が効かない：${codes}`);
   r = await call("/api/nothing");
   expect(r.status === 404, "知らない道すじに 404 を返さない");
 }

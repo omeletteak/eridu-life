@@ -27,9 +27,12 @@ CREATE TABLE IF NOT EXISTS games(
   player TEXT,
   version INTEGER,
   era TEXT, no INTEGER,
-  born_at TEXT
+  born_at TEXT,
+  ip TEXT
 );
 CREATE INDEX IF NOT EXISTS games_no ON games(season, era, no);
+-- ip は送ってきた IP のハッシュの頭。IP ごとの遊びかけの予約を数える
+CREATE INDEX IF NOT EXISTS games_ip ON games(ip, born_at);
 
 -- 歩き終えた一回（亡くなったときに書く）。games と1対1。
 -- 今は path・age・cause・died_at だけを埋める。ほかの欄は lab と同じ形で、
@@ -53,3 +56,16 @@ CREATE TABLE IF NOT EXISTS people(
   died_at TEXT
 );
 CREATE INDEX IF NOT EXISTS people_no ON people(season, era, no);
+
+-- 歩かれた番号（1つの番号に1行）。入ったら marks.walked を1つ増やす
+CREATE TABLE IF NOT EXISTS walked(
+  season INTEGER, era TEXT, no INTEGER,
+  PRIMARY KEY(season, era, no)
+);
+
+-- 歩かれた番号と道の組（1つの組に1行）。入ったら、その道の最初の人
+-- （✦ の印）
+CREATE TABLE IF NOT EXISTS routes(
+  season INTEGER, era TEXT, no INTEGER, path TEXT,
+  PRIMARY KEY(season, era, no, path)
+);

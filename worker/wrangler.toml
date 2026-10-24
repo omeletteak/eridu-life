@@ -12,6 +12,13 @@ binding = "DB"
 database_name = "eridu-life"
 database_id = "0bc438b1-e612-45f0-a337-47ba870d024c"
 
+# born と died の回数を IP ごとに絞る（1分に 10 回まで）。Worker の中では
+# env.LIMITER。namespace_id はこのアカウントの中で重ならない数ならよい。
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = {limit = 10, period = 60}
+
 # PR ごとのプレビュー（Git 連携が wrangler preview で作る）の設定。
 # D1 などのつなぎはここに書かないと引き継がれないので、プレビューには
 # DB がない（API は 503 を返し、本番の表には書かない）。

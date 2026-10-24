@@ -10,10 +10,17 @@
 ** SQL はここで組み、値はいつもプレースホルダで渡す。端末から SQL は
 ** 受け取らない。受け取った道は今は形だけを確かめる（たどり直しはまだ）。
 **
+** いたずらへの備え：born と died は、IP ごとに1分の回数を絞る（wrangler.toml
+** の LIMITER）。IP ごとの遊びかけの予約も MAX_HELD までにする。空いた番号を
+** 探すのは MAX_WINDOWS 回までにし、それで見つからなければ 503 を返す
+** （1回の要求の D1 の問い合わせの上限に当たらないように）。IP は
+** そのまま残さず、ハッシュの頭だけを games.ip に残す。
+**
 **   GET  /api/season         今のシーズンと、時代ごとの歩かれていない番号の数
 **   POST /api/born           番号を配る（生まれる）。games に1行書いて予約する
 **   POST /api/died           歩き終えた道を受け取る。people に1行書く
-**   GET  /api/peers?game=N   同じ1秒の4人の番号と、歩かれていればその道
+**   GET  /api/peers?game=N&player=P
+**                            同じ1秒の4人の番号と、歩かれていればその道
 */
 import E from "./eridu.js";
 
@@ -34,8 +41,11 @@ const HOLD = 2 * 60 * 60 * 1000;
 ** Worker の CPU の枠に収めるため（1人 10 マイクロ秒ほど）。lab は 3000
 */
 const TRIES = 300;
-/* 空いた番号を探すとき、一度に表から引く番号の幅 */
+/* 空いた番号を探すとき、一度に表から引く番号の幅と、引く回数の上限 */
 const WINDOW = 4000;
+const MAX_WINDOWS = 5;
+/* 1つの IP が同時に持てる遊びかけの予約の数 */
+const MAX_HELD = 5;
 /* 歩かれた番号から選ぶとき、一度に引く数 */
 const SAMPLE = 50;
 /* 受け取る本文の大きさの上限（バイト） */
@@ -66,13 +76,46 @@ function json(obj, status){
 const fail = (why, status) => json({error: why}, status || 400);
 
 /*
-** 要求 request の本文を JSON として読んで返す。大きすぎる、または
-** 読めなければ null を返す。
+** 要求 request の本文を、MAX_BODY バイトまで読んで文字列で返す。
+** それより大きければ、残りを読まずに null を返す（Content-Length が
+** なくても、読みながら数える）。
+*/
+async function readCapped(request){
+  if( !request.body ){
+    return "";
+  }
+  const reader = request.body.getReader();
+  const parts = [];
+  let size = 0;
+  for(;;){
+    const {done, value} = await reader.read();
+    if( done ){
+      break;
+    }
+    size += value.length;
+    if( size > MAX_BODY ){
+      await reader.cancel();
+      return null;
+    }
+    parts.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for(const u of parts){
+    all.set(u, at);
+    at += u.length;
+  }
+  return new TextDecoder().decode(all);
+}
+
+/*
+** 要求 request の本文を JSON として読んで返す。読めなければ null を
+** 返す。大きすぎれば {tooBig: true} を返す。
 */
 async function body(request){
-  const text = await request.text();
-  if( text.length > MAX_BODY ){
-    return null;
+  const text = await readCapped(request);
+  if( text === null ){
+    return {tooBig: true};
   }
   try{
     const v = JSON.parse(text);
@@ -80,6 +123,32 @@ async function body(request){
   }catch(e){
     return null;
   }
+}
+
+/*
+** 本文の読み取り q（body の答え）が使えないときの応答を返す。使えれば
+** null。
+*/
+function badBody(q){
+  if( !q ){
+    return fail("body");
+  }
+  return q.tooBig ? fail("too big", 413) : null;
+}
+
+/*
+** 要求 request を送ってきた IP（CF-Connecting-IP）の SHA-256 の頭
+** 16桁を返す。IP がなければ（手元の wrangler dev）"local"。
+*/
+async function ipKey(request){
+  const ip = request.headers.get("CF-Connecting-IP");
+  if( !ip ){
+    return "local";
+  }
+  const h = await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode("eridu-life|" + ip));
+  return [...new Uint8Array(h)].slice(0, 8)
+    .map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 /* シーズン s・時代 era・番号 no の人の運命の名前（lab/fate.js と同じ）を返す。 */
@@ -188,15 +257,19 @@ async function takenIn(db, s, era, from, to){
 ** シーズン s・時代 era の番号 from から順に、歩かれても予約されても
 ** いない番号を探す。place（"" ならどこでも）に生まれるものが見つかったら
 ** found に入れて止める。place があるときは、運命を作ってみるのは
-** TRIES 人まで。{found, low, last} を返す。found は見つけた番号（なければ
-** 0）、low は見た中で歩かれていない番号のいちばん小さいもの（なければ
-** 見た最後の次）、last は最後に見た番号。
+** TRIES 人まで。表から引くのは MAX_WINDOWS 回まで。{found, low, last,
+** busy} を返す。found は見つけた番号（なければ 0）、low は見た中で
+** 歩かれていない番号のいちばん小さいもの（なければ見た最後の次）、
+** last は最後に見た番号、busy は引く回数の上限で止めたとき true。
 */
 async function scan(db, s, era, from, place){
   let low = 0;
   let last = from - 1;
   let tries = 0;
-  for(; from <= s.no_max; from += WINDOW){
+  for(let w = 0; from <= s.no_max; from += WINDOW, w++){
+    if( w >= MAX_WINDOWS ){
+      return {found: 0, low: low || last + 1, last, busy: true};
+    }
     const to = Math.min(from + WINDOW - 1, s.no_max);
     const t = await takenIn(db, s, era, from, to);
     for(let n = from; n <= to; n++){
@@ -221,7 +294,8 @@ async function scan(db, s, era, from, place){
 
 /*
 ** シーズン s・時代 era で、歩かれても予約されてもいない番号のうち
-** いちばん小さいものを返す。番号が残っていなければ 0。
+** いちばん小さいものを返す。番号が残っていなければ 0。予約が混んでいて
+** 探しきれなければ -1。
 **
 ** place があれば、そこに生まれる番号を先に探す（なければ場所は見ない）。
 ** 場所を選ぶ人が多いと、小さい番号のあたりには選ばれにくい地区の番号
@@ -246,7 +320,7 @@ async function firstFree(db, s, era, place){
   if( r.low > m.low ){
     await setLow(db, s, era, "", r.low);
   }
-  return r.found;
+  return r.busy ? -1 : r.found;
 }
 
 /*
@@ -294,10 +368,10 @@ async function getSeason(env){
 ** 画面では区別しない）。
 ** 端末は season・version・era・no から運命の名前を作り、本人を作る。
 */
-async function born(request, env){
+async function born(request, env, ip){
   const q = await body(request);
-  if( !q ){
-    return fail("body");
+  if( badBody(q) ){
+    return badBody(q);
   }
   if( typeof q.player !== "string" || !PLAYER_ID.test(q.player) ){
     return fail("player");
@@ -313,6 +387,13 @@ async function born(request, env){
     return json({error: "version", version: E.VERSION}, 409);
   }
   const db = env.DB;
+  const held = await db.prepare(
+    "SELECT count(*) AS n FROM games g WHERE ip = ? AND born_at > ? " +
+      "AND NOT EXISTS(SELECT 1 FROM people p WHERE p.game = g.id)"
+  ).bind(ip, iso(Date.now() - HOLD)).first();
+  if( held.n >= MAX_HELD ){
+    return fail("held", 429);
+  }
   let s = await season(db);
   let no = 0;
   if( (await mark(db, s, q.era, "")).walked && Math.random() < REBORN ){
@@ -326,10 +407,13 @@ async function born(request, env){
     s = await newSeason(db, s);
     no = await firstFree(db, s, q.era, place);
   }
+  if( no < 0 ){
+    return fail("busy", 503);
+  }
   const r = await db.prepare(
-    "INSERT INTO games(season, player, version, era, no, born_at) " +
-      "VALUES(?, ?, ?, ?, ?, ?)"
-  ).bind(s.id, q.player, s.version, q.era, no, iso()).run();
+    "INSERT INTO games(season, player, version, era, no, born_at, ip) " +
+      "VALUES(?, ?, ?, ?, ?, ?, ?)"
+  ).bind(s.id, q.player, s.version, q.era, no, iso(), ip).run();
   const game = r.meta.last_row_id;
   return json({
     game, season: s.id, version: s.version, era: q.era, no, reborn: again,
@@ -349,12 +433,14 @@ const goodPath = path =>
 ** 歩き終えた一回を people に1行書く。game は born が返した番号で、
 ** 同じ player のものでなければならない。同じ番号をまったく同じ道で
 ** 歩いた人がまだいなければ mark を true にして {mark} を返す
-** （その道に名前が付いた印。docs/world.md）。
+** （その道に名前が付いた印。docs/world.md）。印と歩かれた番号の数は、
+** routes と walked に INSERT OR IGNORE して、入ったかどうかで決める
+** （同時に送られても、1人にしか付かず、1回しか数えない）。
 */
 async function died(request, env){
   const q = await body(request);
-  if( !q ){
-    return fail("body");
+  if( badBody(q) ){
+    return badBody(q);
   }
   if( !Number.isInteger(q.game) ){
     return fail("game");
@@ -377,32 +463,38 @@ async function died(request, env){
     return fail("game", 404);
   }
   const path = q.path.join(",");
-  const seen = await db.prepare(
-    "SELECT count(*) AS n, coalesce(sum(path = ?), 0) AS same " +
-      "FROM people WHERE season = ? AND era = ? AND no = ?"
-  ).bind(path, g.season, g.era, g.no).first();
-  const stmts = [db.prepare(
-    "INSERT INTO people(game, season, era, no, path, age, alive, cause, " +
-      "died_at) VALUES(?, ?, ?, ?, ?, ?, 0, ?, ?)"
-  ).bind(g.id, g.season, g.era, g.no, path, q.age, q.cause, iso())];
-  if( !seen.n ){
-    stmts.push(db.prepare(
-      "INSERT INTO marks(season, era, place, low, walked) " +
-        "VALUES(?, ?, '', ?, 1) " +
-        "ON CONFLICT(season, era, place) DO UPDATE SET walked = walked + 1"
-    ).bind(g.season, g.era, g.no_min));
-  }
+  let got;
   try{
-    await db.batch(stmts);
+    got = await db.batch([
+      db.prepare(
+        "INSERT INTO people(game, season, era, no, path, age, alive, " +
+          "cause, died_at) VALUES(?, ?, ?, ?, ?, ?, 0, ?, ?)"
+      ).bind(g.id, g.season, g.era, g.no, path, q.age, q.cause, iso()),
+      db.prepare(
+        "INSERT OR IGNORE INTO walked(season, era, no) VALUES(?, ?, ?)"
+      ).bind(g.season, g.era, g.no),
+      db.prepare(
+        "INSERT OR IGNORE INTO routes(season, era, no, path) " +
+          "VALUES(?, ?, ?, ?)"
+      ).bind(g.season, g.era, g.no, path),
+    ]);
   }catch(e){
     /* game は UNIQUE なので、同じ一回を2度送ると入らない */
     return fail("done", 409);
   }
-  return json({mark: !seen.same});
+  if( got[1].meta.changes ){
+    await db.prepare(
+      "INSERT INTO marks(season, era, place, low, walked) " +
+        "VALUES(?, ?, '', ?, 1) " +
+        "ON CONFLICT(season, era, place) DO UPDATE SET walked = walked + 1"
+    ).bind(g.season, g.era, g.no_min).run();
+  }
+  return json({mark: got[2].meta.changes > 0});
 }
 
 /*
-** GET /api/peers?game=N：born が返した一回 N と同じ組（同じ1秒）の
+** GET /api/peers?game=N&player=P：born が返した一回 N（プレイヤー P の
+** もの。ほかの人の一回には答えない）と同じ組（同じ1秒）の
 ** 4人の番号を返す。誰かが歩き終えた番号なら、いちばん早く歩きはじめた
 ** 人の道を path（選択肢の ID の配列）に入れる。歩かれていなければ
 ** path は null（端末が運命の選ぶ道を行かせる）。
@@ -415,10 +507,10 @@ async function peers(url, env){
   }
   const db = env.DB;
   const g = await db.prepare(
-    "SELECT g.season, g.era, g.no, s.version, s.no_min, s.no_max " +
+    "SELECT g.season, g.era, g.no, g.player, s.version, s.no_min, s.no_max " +
       "FROM games g JOIN seasons s ON s.id = g.season WHERE g.id = ?"
   ).bind(id).first();
-  if( !g ){
+  if( !g || g.player !== url.searchParams.get("player") ){
     return fail("game", 404);
   }
   const s = {id: g.season, version: g.version, no_min: g.no_min};
@@ -446,17 +538,31 @@ async function peers(url, env){
 /*
 ** /api/ で始まる要求 request（URL は url）を、道すじと方法で上の
 ** 処理に振り分けて応答を返す。D1 がつながっていなければ 503。
+** POST は、本文が大きすぎれば 413、IP ごとの回数を超えたら 429
+** （LIMITER がつながっていなければ数えない）。
 */
 export async function handle(request, url, env){
   if( !env.DB ){
     return fail("no database", 503);
   }
   const route = request.method + " " + url.pathname;
+  const ip = await ipKey(request);
+  if( request.method === "POST" ){
+    if( +request.headers.get("content-length") > MAX_BODY ){
+      return fail("too big", 413);
+    }
+    if( env.LIMITER ){
+      const r = await env.LIMITER.limit({key: route + "|" + ip});
+      if( !r.success ){
+        return fail("slow", 429);
+      }
+    }
+  }
   switch( route ){
     case "GET /api/season":
       return getSeason(env);
     case "POST /api/born":
-      return born(request, env);
+      return born(request, env, ip);
     case "POST /api/died":
       return died(request, env);
     case "GET /api/peers":

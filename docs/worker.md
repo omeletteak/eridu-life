@@ -13,7 +13,7 @@ URL：https://eridu-life.omeletteanko.workers.dev
 | `worker/src/index.js` | 入口。`/hello` と `/api/…` を振り分ける。ほかは 404 |
 | `worker/src/api.js` | 道の共有の API。番号を配る・道を受け取る・同じ1秒の道を返す |
 | `worker/src/eridu.js` | 本編の `js/data.js` と `js/sim.js` を Worker に読み込む |
-| `worker/schema.sql` | D1 の表。lab と同じ形（`docs/schema.md`）に、目印の `marks` を足したもの |
+| `worker/schema.sql` | D1 の表。lab と同じ形（`docs/schema.md`）に、目印の `marks`、`walked`・`routes` を足したもの |
 | `worker/wrangler.toml` | wrangler の設定（名前・入口・D1 のつなぎ） |
 | `tools/api.js` | API の点検。手元の Worker に要求を送って答えを調べる |
 
@@ -32,7 +32,7 @@ URL：https://eridu-life.omeletteanko.workers.dev
 | `GET /api/season` | なし | `{season, version, left: {now, old}}`（歩かれていない番号の数） |
 | `POST /api/born` | `{player, era, place, version}` | `{game, season, version, era, no, reborn}` |
 | `POST /api/died` | `{player, game, path, age, cause}` | `{mark}`（✦ の印を付けるか） |
-| `GET /api/peers?game=N` | born の `game` | `{season, version, era, peers: [{no, path}]}` |
+| `GET /api/peers?game=N&player=P` | born の `game` と自分の `player` | `{season, version, era, peers: [{no, path}]}` |
 
 - born：番号は `lab/fate.js` と同じ決まりで配る（20% はもう歩かれた番号、ほかは
   まだ歩かれていない番号のいちばん小さいもの。場所を選んだらそこに生まれる番号）。
@@ -40,10 +40,20 @@ URL：https://eridu-life.omeletteanko.workers.dev
   `version` が今の sim.js と違えば 409 と今の版を返す（端末の読み込み直しが要る）
 - died：`path` は選択肢の ID の配列。同じ `game` は1回だけ。同じ番号をまったく同じ
   道で歩いた人がまだいなければ `mark` が true
-- peers：同じ1秒の4人。歩かれた番号なら、空でない道のうち、いちばん早く歩き
+- died の ✦ と歩かれた番号の数は、`routes`・`walked` に入ったかで決める
+  （同時に送られても1人にしか付かない）
+- peers：自分の `game` にだけ答える。同じ1秒の4人。歩かれた番号なら、空でない道のうち、いちばん早く歩き
   はじめた人の道。歩かれていなければ `path` は null
 - 端末は `season`・`version`・`era`・`no` から運命の名前（`s1|v2|now|100000`）を
   作り、本人と4人を自分で作る
+
+## いたずらへの備え
+- born と died は、IP ごとに1分に10回まで（`wrangler.toml` の `[[ratelimits]]`。
+  超えたら 429）。IP はハッシュの頭だけを `games.ip` に残す
+- 1つの IP の遊びかけの予約は5つまで（超えたら 429）
+- 空いた番号を探して表を引くのは5回まで。予約で埋まって見つからなければ 503
+  （1回の要求の D1 の問い合わせの上限に当たらないように）
+- 本文は 16KB まで（超えたら 413）
 
 ## 書き込みの量
 D1 の無料の枠は、書き込みが1日10万行（索引の更新も数える）。一生で書くのは、
@@ -53,7 +63,6 @@ D1 の無料の枠は、書き込みが1日10万行（索引の更新も数え�
 ## まだしないこと（issue #21 の続き）
 - 受け取った道のたどり直し（sim.js で選択・年齢・死因を比べる。#11）。今は形
   （決まった形の ID か）だけを確かめる
-- 連打やいたずらへの備え
 - lab をこの API につなぐ（lab を Worker からも配って、同じ URL で動かす）
 - プレイヤーの本人確認（今は端末の乱数の id だけ）
 
@@ -62,6 +71,10 @@ D1 の無料の枠は、書き込みが1日10万行（索引の更新も数え�
 2. 出てきた ID を `wrangler.toml` の `database_id` に書く
 3. そのデータベースの「Console」に `worker/schema.sql` を丸ごと貼って実行する
    （何度実行しても壊れない）
+
+PR #23 のマージの前に一度実行していたら、表を消してから実行し直す（中身は
+まだ空）：`DROP TABLE IF EXISTS people; DROP TABLE IF EXISTS games;`
+`DROP TABLE IF EXISTS marks; DROP TABLE IF EXISTS seasons;`
 
 表の形を変えるときは、`schema.sql` を直し、移し替えの SQL（`ALTER TABLE …`）を
 Console で実行する。前のシーズンの行は消さない。
