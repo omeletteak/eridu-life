@@ -63,7 +63,8 @@ URL：https://eridu-life.omeletteanko.workers.dev
 ## 書き込みの量
 D1 の無料の枠は、書き込みが1日10万行（索引の更新も数える）。一生で書くのは、
 生まれたとき（games と目印）と亡くなったとき（people と目印）の数行だけ。
-1日 1万人ほどまでは収まる見込み。
+1日 8千人ほどまでは収まる見込み（games・people・walked・routes・marks と
+その索引で、一生あたり12行ほど）。
 
 ## まだしないこと（issue #21 の続き）
 - lab をこの API につなぐ（lab を Worker からも配って、同じ URL で動かす。CORS を
@@ -98,7 +99,9 @@ node ../tools/api.js -n 300
 ので、`MIN_PICK_MS` を 0 にした Worker に向ける。
 
 ## デプロイ
-ダッシュボードの Git 連携で、main が更新されるとデプロイされる。`wrangler.toml`
+ダッシュボードの Git 連携で、main が更新されるとデプロイされる。ビルドの設定の
+ルートディレクトリは `worker`（リポジトリのいちばん上には設定ファイルがないので、
+そのままだと Cloudflare が自分で作った設定でデプロイしてしまう）。`wrangler.toml`
 の `name` はダッシュボードの Worker の名前（`eridu-life`）と同じにしておく。
 
 PR を出すと、Git 連携が `wrangler preview` でプレビューを作る。そのため
