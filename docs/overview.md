@@ -35,7 +35,7 @@
 - data.js と sim.js は `globalThis.Eridu` に載せる形。ブラウザでは script タグ、Node では `require` で読む
 - `lab/index.html` は `eridu-life.html` の写し（パスを `../` に、lab の script と注記を足したもの）。
   本編のマークアップを変えたらこちらも合わせる
-- `lab/vendor/` は sql.js 1.12.0（MIT）。手を入れない
+- `lab/vendor/` は sql.js 1.15.2（MIT、SQLite 3.54.0）。手を入れない
 
 ## 画面の決まり
 - 住民番号は、亡くなるまで存在ごと出さない（住民票の見出しは「住民記録」だけ）。亡くなると住民票・最期の画面・
