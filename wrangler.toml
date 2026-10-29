@@ -1,15 +1,17 @@
 # lab の道を共有する Worker の設定（docs/worker.md）。
 # ダッシュボードの Git 連携で、main が更新されるとデプロイされる。
+# リポジトリのいちばん上に置く。wrangler は動いているフォルダから上へ
+# 設定を探すので、ビルドが上で動いても worker/ で動いても見つかる。
 # name はダッシュボードの Worker の名前と同じにする。
 name = "eridu-life"
-main = "src/index.js"
+main = "worker/src/index.js"
 compatibility_date = "2026-10-01"
 
 # リポジトリのいちばん上を静的アセットとして配る（本編は /、lab は /lab/）。
 # 配らないものはリポジトリの上の .assetsignore、応答のヘッダー（CSP）は
 # _headers に書く。/api/ と /hello だけは先に Worker が受ける。
 [assets]
-directory = "../"
+directory = "./"
 run_worker_first = ["/api/*", "/hello"]
 
 # D1 のデータベース。Worker の中では env.DB で使う。

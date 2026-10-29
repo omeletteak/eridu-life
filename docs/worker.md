@@ -19,7 +19,7 @@ Worker の URL でも本編（`/`）と lab（`/lab/`）が遊べる。Worker �
 | `worker/src/api.js` | 道の共有の API。番号を配る・道を受け取る・同じ1秒の道を返す |
 | `worker/src/eridu.js` | 本編の `js/data.js` と `js/sim.js` を Worker に読み込む |
 | `worker/schema.sql` | D1 の表。lab と同じ形（`docs/schema.md`）に、目印の `marks`、`walked`・`routes` を足したもの |
-| `worker/wrangler.toml` | wrangler の設定（名前・入口・D1 のつなぎ） |
+| `wrangler.toml` | wrangler の設定（名前・入口・アセット・D1 のつなぎ）。リポジトリのいちばん上に置く |
 | `tools/api.js` | API の点検。手元の Worker に要求を送って答えを調べる |
 
 - Worker は ES modules（`export default`）で書く。Workers の決まりなので、本編の
@@ -94,21 +94,21 @@ Console で実行する。前のシーズンの行は消さない。
 Node.js 18 以上が要る。
 
 ```
-cd worker
-npx wrangler d1 execute DB --local --file schema.sql
+npx wrangler d1 execute DB --local --file worker/schema.sql
 npx wrangler dev --var MIN_PICK_MS:0
-node ../tools/api.js -n 300
+node tools/api.js -n 300
 ```
 
-手元の D1 は `worker/.wrangler/` に置かれる（git には入れない）。
+手元の D1 は `.wrangler/` に置かれる（git には入れない）。
 `tools/api.js` は表に行を書くので、本番の URL には向けない。決断のたびに待たない
 ので、`MIN_PICK_MS` を 0 にした Worker に向ける。
 
 ## デプロイ
-ダッシュボードの Git 連携で、main が更新されるとデプロイされる。ビルドの設定の
-ルートディレクトリは、「Production」と「Previews Base」の両方のタブで `worker`（リポジトリのいちばん上には設定ファイルがないので、
-そのままだと Cloudflare が自分で作った設定でデプロイしてしまう）。`wrangler.toml`
-の `name` はダッシュボードの Worker の名前（`eridu-life`）と同じにしておく。
+ダッシュボードの Git 連携で、main が更新されるとデプロイされる。`wrangler.toml`
+はリポジトリのいちばん上に置く。wrangler は動いているフォルダから上へ設定を
+探すので、ビルドのルートディレクトリが `/` でも `worker` でも見つかる（PR の
+プレビューのビルドが worker/ の設定を見つけられずに止まったため、上に移した）。
+`name` はダッシュボードの Worker の名前（`eridu-life`）と同じにしておく。
 
 PR を出すと、Git 連携が `wrangler preview` でプレビューを作る。そのため
 `wrangler.toml` に空の `[previews]` を置いている。D1 のつなぎはプレビューに
