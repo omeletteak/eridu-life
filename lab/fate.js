@@ -19,6 +19,12 @@
 ** 歩き終えた人の道をたどる。誰も歩いていなければ、運命が選ぶ道を行く。
 ** どちらも見た目では区別しない。歩きかけの番号は「歩かれていない」
 ** 扱い（道は最後の選択まで決まらない）。
+**
+** サーバー：Worker（worker/、docs/worker.md）から配られているときは、
+** 番号と同じ1秒の道をサーバーの API からもらい、亡くなったら道を送る
+** （みんなで1つの世界）。✦ の印はサーバーの答えで決める。サーバーに
+** つながらないとき、GitHub Pages や file:// で開いたとき、?local を
+** 付けたときは、今までどおりこの端末の表だけで決める。
 */
 (() => {
   const E = window.Eridu;
@@ -123,12 +129,12 @@
   }
 
   /*
-  ** 本人を作って返す（ui.js の「生まれる」から）。時代 era、生まれる
-  ** 場所 place（"" ならどこでも）。番号は上の見出しのとおりに決め、
+  ** この端末の表だけで本人を作って返す（E.meSource から）。時代 era、
+  ** 生まれる場所 place（"" ならどこでも）。番号は上の見出しのとおりに決め、
   ** 歩きかけの記録を作る（E.walk。表に書くのは亡くなったとき）。
   ** データベースの用意ができていなければ null（ui.js がいつもどおり生む）。
   */
-  E.meSource = (era, place) => {
+  function localMe(era, place){
     if( !E.db ){
       return null;
     }
@@ -152,13 +158,14 @@
     E.walk(p, s.id, era, no);
     now = {s, era};
     return p;
-  };
+  }
 
   /*
-  ** 本人 me と同じ組（同じ1秒）の4人を作って返す。誰かが歩いた番号なら
+  ** この端末の表だけで、本人 me と同じ組（同じ1秒）の4人を作って返す
+  ** （E.peerSource から）。誰かが歩いた番号なら
   ** その道を p.route に入れる。me に運命がなければ（開発用）空の配列。
   */
-  E.peerSource = me => {
+  function localPeers(me){
     if( !me.fate || !now ){
       return [];
     }
@@ -182,6 +189,172 @@
       out.push(q);
     }
     return out;
+  }
+
+  /*
+  ** サーバーにつなぐか。http(s) で開いていて、GitHub Pages ではなく、
+  ** ?local がないとき。つながらなかったら false にして端末だけで続ける
+  */
+  let server = /^https?:$/.test(location.protocol) &&
+    !location.hostname.endsWith("github.io") &&
+    !new URLSearchParams(location.search).has("local");
+  /* サーバーが配った本人の、一回の番号（games.id）を引く表 */
+  const games = new WeakMap();
+  /* 前世の記録の localStorage のキー（ui.js と同じ） */
+  const MEM_KEY = "eridu-life-memorial";
+
+  /*
+  ** API の path に、本文 obj があれば POST で、なければ GET で送り、
+  ** 答えの JSON を返す。つながらない・200 でないときは例外を投げる。
+  */
+  async function api(path, obj){
+    const opt = obj === undefined
+      ? {}
+      : {
+        method: "POST",
+        headers: {"content-type": "application/json"},
+        body: JSON.stringify(obj),
+      };
+    const r = await fetch("/api/" + path, opt);
+    if( !r.ok ){
+      throw new Error(path + " " + r.status);
+    }
+    return r.json();
+  }
+
+  /*
+  ** サーバーから番号をもらって本人を作り、返す（時代 era、生まれる場所
+  ** place）。シーズンはサーバーのもの。この端末の表にも同じシーズンの
+  ** 行を置き、歩きかけの記録を作る（E.walk）。
+  */
+  async function serverMe(era, place){
+    await E.dbReady;
+    const b = await api("born", {
+      player: E.player, era, place, version: E.VERSION,
+    });
+    const s = {
+      id: b.season, version: b.version, no_min: NO_MIN, no_max: NO_MAX,
+    };
+    E.dbRun(
+      "INSERT OR IGNORE INTO seasons(id, version, no_min, no_max, " +
+        "started_at) VALUES(?, ?, ?, ?, ?)",
+      [s.id, s.version, s.no_min, s.no_max, iso()]
+    );
+    const p = resident(s, era, b.no, false);
+    E.walk(p, s.id, era, b.no);
+    now = {s, era};
+    games.set(p, b.game);
+    return p;
+  }
+
+  /*
+  ** サーバーが配った本人 me と同じ1秒の4人を作って返す。歩かれた番号
+  ** なら、サーバーが返した道を p.route に入れる。
+  */
+  async function serverPeers(me){
+    const {s, era} = now;
+    const r = await api(`peers?game=${games.get(me)}&player=${E.player}`);
+    return r.peers.map(x => {
+      const q = resident(s, era, x.no, true);
+      if( x.path ){
+        q.route = x.path;
+        q.routeAt = 0;
+      }
+      return q;
+    });
+  }
+
+  /*
+  ** 亡くなった本人 p の印 ✦ を、mark のとおりに画面と前世の記録へ
+  ** 出し直す（サーバーの答えが最期の画面より後に届いたとき）。
+  */
+  function showMark(p, mark){
+    const span = `<span class="mark" aria-hidden="true">✦</span>`;
+    const head = document.querySelector("#end:not([hidden]) .eyebrow");
+    if( head && head.textContent.includes("No." + p.no) ){
+      const old = head.querySelector(".mark");
+      if( old && !mark ){
+        old.remove();
+      }else if( !old && mark ){
+        head.insertAdjacentHTML("beforeend", span);
+      }
+    }
+    try{
+      const m = JSON.parse(localStorage.getItem(MEM_KEY) || "[]");
+      if( m.length && m[0].no === p.no && m[0].n === p.name ){
+        m[0].m = mark;
+        localStorage.setItem(MEM_KEY, JSON.stringify(m));
+        const who = document.querySelector("#memorial > div > span");
+        const old = who && who.querySelector(".mark");
+        if( old && !mark ){
+          old.remove();
+        }else if( who && !old && mark ){
+          who.insertAdjacentHTML("beforeend", span);
+        }
+      }
+    }catch(e){}
+  }
+
+  /*
+  ** 亡くなった本人 p の道 path（選択肢の ID の配列）をサーバーに送る
+  ** （db.js の commit から）。サーバーが配った本人でなければ何もしない。
+  ** 印は、端末の表ではなくサーバーの答えで決める。届くまでは付けない。
+  */
+  E.onCommit = (p, path) => {
+    const game = games.get(p);
+    if( !game ){
+      return;
+    }
+    games.delete(p);
+    p.mark = false;
+    api("died", {player: E.player, game, path}).then(
+      r => {
+        p.mark = r.mark;
+        showMark(p, r.mark);
+      },
+      e => console.warn("lab: 道を送れませんでした", e)
+    );
+  };
+
+  /*
+  ** 本人を作って返す（ui.js の「生まれる」から）。サーバーにつなぐなら
+  ** サーバーから、つながらなければ端末の表から（localMe）。
+  */
+  E.meSource = async (era, place) => {
+    if( server ){
+      try{
+        return await serverMe(era, place);
+      }catch(e){
+        console.warn("lab: サーバーにつながらないので端末だけで遊びます", e);
+        server = false;
+      }
+    }
+    return localMe(era, place);
+  };
+
+  /*
+  ** 本人 me と同じ1秒の4人を作って返す。サーバーが配った本人なら
+  ** サーバーから、そうでなければ端末の表から（localPeers）。サーバーから
+  ** もらえなければ、運命が選ぶ道を行く4人にする。
+  */
+  E.peerSource = async me => {
+    if( games.has(me) ){
+      try{
+        return await serverPeers(me);
+      }catch(e){
+        console.warn("lab: 同じ1秒の道をもらえませんでした", e);
+        const {s, era} = now;
+        const start = blockStart(s, me.no);
+        const out = [];
+        for(let n = start; n < start + BLOCK; n++){
+          if( n !== me.no ){
+            out.push(resident(s, era, n, true));
+          }
+        }
+        return out;
+      }
+    }
+    return localPeers(me);
   };
 
   /*

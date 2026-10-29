@@ -795,8 +795,20 @@
   /*
   ** 「生まれる」：自分と、名前の重ならない4人を生まれさせて、1年ずつ
   ** 進めはじめる。開発用の ?fall などがあれば、陥落の前年まで一気に進める。
+  ** lab の meSource・peerSource は Promise を返すことがある（サーバーに
+  ** 聞くとき）ので待つ。待っている間は「生まれる」を押せなくする。
   */
-  $("bornBtn").onclick = () => {
+  $("bornBtn").onclick = async () => {
+    $("bornBtn").disabled = true;
+    try{
+      await bornNow();
+    }finally{
+      $("bornBtn").disabled = false;
+    }
+  };
+
+  /* 「生まれる」の中身（上の見出しのとおり）。 */
+  async function bornNow(){
     stopAlarm();
     /* 開発用：URL に ?fall を付けると旧都陥落の前に生まれ、1歳で陥落が来る */
     const era = DEBUG_FALL !== null ? "old" : state.era;
@@ -811,7 +823,7 @@
     ** 決まる人）。開発用の ?fall では使わない
     */
     const src = window.Eridu.meSource;
-    me = src && DEBUG_FALL === null ? src(era, place) : null;
+    me = src && DEBUG_FALL === null ? await src(era, place) : null;
     if( !me ){
       me = newPerson(era, false, place);
     }
@@ -856,7 +868,7 @@
     ** （ほかのプレイヤーの一生。本人の陥落の年齢を揃えることもある）、
     ** 足りない分をこの場で生む。
     */
-    peers = window.Eridu.peerSource ? window.Eridu.peerSource(me) : [];
+    peers = window.Eridu.peerSource ? await window.Eridu.peerSource(me) : [];
     while( peers.length < 4 ){
       const q = newPerson(era, true);
       if( q.name !== me.name && !peers.some(x => x.name === q.name) ){
@@ -911,6 +923,6 @@
     renderAll();
     schedule();
     window.scrollTo(0, 0);
-  };
+  }
   renderMemorial();
 })();

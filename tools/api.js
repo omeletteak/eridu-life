@@ -5,8 +5,8 @@
 ** Worker には向けない（手元の wrangler dev だけ）。
 **
 ** 使い方（docs/worker.md）:
-**   cd worker && npx wrangler d1 execute DB --local --file schema.sql
-**   cd worker && npx wrangler dev --var MIN_PICK_MS:0
+**   npx wrangler d1 execute DB --local --file worker/schema.sql
+**   npx wrangler dev --var MIN_PICK_MS:0
 **   node tools/api.js [-n 人数] [URL]     URL の既定は http://localhost:8787
 **
 ** 調べること:
