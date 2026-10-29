@@ -223,6 +223,32 @@
   }
 
   /*
+  ** サーバーの答えの値 x が整数ならそのまま返し、ちがえば投げる
+  ** （番号などは画面の HTML に入るので、文字列を通さない）。what は
+  ** エラーの文に出す名前。
+  */
+  function int(x, what){
+    if( !Number.isInteger(x) ){
+      throw new Error("lab: サーバーの " + what + " が整数ではありません");
+    }
+    return x;
+  }
+
+  /*
+  ** サーバーの答えの道 x（選択肢の ID の配列）を確かめて返す。なければ
+  ** null。文字列の配列でなければ投げる。
+  */
+  function route(x){
+    if( x === undefined || x === null ){
+      return null;
+    }
+    if( !Array.isArray(x) || !x.every(id => typeof id === "string") ){
+      throw new Error("lab: サーバーの path が文字列の配列ではありません");
+    }
+    return x;
+  }
+
+  /*
   ** サーバーから番号をもらって本人を作り、返す（時代 era、生まれる場所
   ** place）。シーズンはサーバーのもの。この端末の表にも同じシーズンの
   ** 行を置き、歩きかけの記録を作る（E.walk）。
@@ -233,17 +259,19 @@
       player: E.player, era, place, version: E.VERSION,
     });
     const s = {
-      id: b.season, version: b.version, no_min: NO_MIN, no_max: NO_MAX,
+      id: int(b.season, "season"), version: int(b.version, "version"),
+      no_min: NO_MIN, no_max: NO_MAX,
     };
+    const no = int(b.no, "no");
     E.dbRun(
       "INSERT OR IGNORE INTO seasons(id, version, no_min, no_max, " +
         "started_at) VALUES(?, ?, ?, ?, ?)",
       [s.id, s.version, s.no_min, s.no_max, iso()]
     );
-    const p = resident(s, era, b.no, false);
-    E.walk(p, s.id, era, b.no);
+    const p = resident(s, era, no, false);
+    E.walk(p, s.id, era, no);
     now = {s, era};
-    games.set(p, b.game);
+    games.set(p, int(b.game, "game"));
     return p;
   }
 
@@ -255,9 +283,10 @@
     const {s, era} = now;
     const r = await api(`peers?game=${games.get(me)}&player=${E.player}`);
     return r.peers.map(x => {
-      const q = resident(s, era, x.no, true);
-      if( x.path ){
-        q.route = x.path;
+      const q = resident(s, era, int(x.no, "no"), true);
+      const path = route(x.path);
+      if( path ){
+        q.route = path;
         q.routeAt = 0;
       }
       return q;
