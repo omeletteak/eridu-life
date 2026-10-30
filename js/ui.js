@@ -600,10 +600,12 @@
     <div class="lifemap" aria-label="人生地図。1マスが1年">${map}</div>
     <p class="muted" style="font-size:12px;margin-top:6px">1マス＝1年。紫は侵蝕度60以上で過ごした年。</p>
     <div class="row" style="margin-top:14px"><button class="btn" id="againBtn">もう一度生まれる</button></div>
+    ${shareRow(p)}
   </div>${p.cause === "旧都陥落" ? `<div id="endReport"></div>` : ""}`;
     if( p.cause === "旧都陥落" ){
       fallReport($("endReport"), false);
     }
+    bindShare(p);
     $("againBtn").onclick = () => {
       applyEra(state.era === "old");
       $("end").hidden = true;
@@ -615,6 +617,83 @@
     renderMemorial();
     $("pauseBtn").disabled = true;
     $("end").scrollIntoView({block: "start"});
+  }
+
+  /* ===== 結果のシェア ===== */
+
+  /* 公開している本編の URL。file:// で開いたときのシェア先に使う */
+  const SITE = "https://omeletteak.github.io/eridu-life/";
+
+  /*
+  ** シェアする URL を返す。http(s) で開いていれば、いまのページの URL から
+  ** 開発用の ?fall などを落とし、末尾の eridu-life.html も落とす（フォルダの
+  ** URL の index.html にも OGP があるので、リンクの絵が出る）。lab なら lab の
+  ** URL になる。file:// などで開いていれば公開している本編の URL。
+  */
+  function shareUrl(){
+    if( !/^https?:$/.test(location.protocol) ){
+      return SITE;
+    }
+    const path = location.pathname.replace(/eridu-life\.html$/, "");
+    return location.origin + path;
+  }
+
+  /*
+  ** p の一生を、SNS に投稿する短い文にして返す（URL は含めない）。
+  ** 住民番号・名前・年齢・死因・生まれた場所・最後の仕事とハッシュタグ。
+  ** 死因と地名はネタバレを含まないので、設定によらず同じ文になる。
+  */
+  function shareText(p){
+    const job = JOBS[p.job].name;
+    return (
+      `住民番号 No.${p.no}、${p.name}（${kindOf(p)}）。` +
+      `${p.birthD.name}で生まれ、最後の仕事は「${job}」。` +
+      `${p.age}歳、${p.cause}。\n#新エリー都の一生`
+    );
+  }
+
+  /*
+  ** 最期の画面に置くシェアの並びの HTML を返す。X と Bluesky の投稿画面を
+  ** 新しいタブで開くリンクと、端末のシェア（navigator.share があるときだけ）。
+  ** リンクの URL は & を含むので esc を通して属性に入れる。
+  */
+  function shareRow(p){
+    const text = shareText(p);
+    const url = shareUrl();
+    const x =
+      "https://x.com/intent/post?text=" +
+      encodeURIComponent(text) +
+      "&url=" +
+      encodeURIComponent(url);
+    const bsky =
+      "https://bsky.app/intent/compose?text=" +
+      encodeURIComponent(text + "\n" + url);
+    const native = navigator.share
+      ? `<button class="btn ghost" id="shareBtn">ほかのアプリで送る</button>`
+      : "";
+    return `<div class="share">
+    <div class="eyebrow">結果をシェア</div>
+    <div class="row">
+      <a class="btn ghost" href="${esc(x)}" target="_blank" rel="noopener">X に投稿</a>
+      <a class="btn ghost" href="${esc(bsky)}" target="_blank" rel="noopener">Bluesky に投稿</a>
+      ${native}
+    </div>
+  </div>`;
+  }
+
+  /*
+  ** 最期の画面の「ほかのアプリで送る」に、p の結果を端末のシェアで送る
+  ** 動きを付ける。ボタンがなければ（navigator.share がない）何もしない。
+  ** 閉じられたときの失敗は無視する。
+  */
+  function bindShare(p){
+    const b = $("shareBtn");
+    if( !b ){
+      return;
+    }
+    b.onclick = () => {
+      navigator.share({text: shareText(p), url: shareUrl()}).catch(() => {});
+    };
   }
 
   /* ===== 前世の記録 ===== */
