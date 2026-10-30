@@ -401,6 +401,19 @@ label.lbl {
   font-size: 22px;
   margin: 6px 0;
 }
+/* 最期の画面の「結果をシェア」。a の .btn をボタンと同じ見た目にする */
+.share {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.share .eyebrow {
+  margin-bottom: 8px;
+}
+.share a.btn {
+  display: inline-block;
+  text-decoration: none;
+}
 .lifemap {
   display: grid;
   grid-template-columns: repeat(20, 1fr);

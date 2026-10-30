@@ -28,6 +28,7 @@
 | `tools/choices.js` | 選択肢の総点検。決断や選択肢を足したら、ここの SCENES にも場面を足す |
 | `tools/fate.js` | 運命の点検と、版の上げ忘れの点検（答えは `tools/fate-golden.json`） |
 | `tools/style.js` | 書き方の点検 |
+| `tools/ogp.js` | OGP 画像（リンクを貼ったときの絵）を `tools/ogp.html` から `img/ogp.png` に書き出す（Playwright を使う） |
 | `tools/api.js` | 道の共有の API の点検（手元の Worker に向ける。`docs/worker.md`） |
 | `lab/` | 試験版。人の記録を SQLite に置き、世界と道の仕組みを試す（`docs/world.md`・`docs/schema.md`） |
 | `worker/` | lab の道を共有する Cloudflare Worker と D1 の表（`docs/worker.md`） |
@@ -40,6 +41,11 @@
 ## 画面の決まり
 - 住民番号は、亡くなるまで存在ごと出さない（住民票の見出しは「住民記録」だけ）。亡くなると住民票・最期の画面・
   前世の記録に出す（本編も lab も）
+- 最期の画面に「結果をシェア」を出す。X と Bluesky の投稿画面へのリンクと、端末のシェア（使えるときだけ）。
+  文は住民番号・名前・生まれた場所・最後の仕事・年齢・死因と `#新エリー都の一生`。URL は開いているページ
+  （開発用の `?fall` などは落とす。file:// なら公開している本編）
+- `eridu-life.html`・`index.html`・`lab/index.html` に OGP のメタタグがある。絵は `img/ogp.png`（絶対 URL で
+  GitHub Pages を指す）。マークアップを変えるときは3つとも合わせる
 
 ## 開発用の URL
 - `eridu-life.html?fall`：旧都陥落の前に生まれ、1歳で陥落が来る。`?fall=near` で範囲の中、`?fall=far` で範囲の外。
